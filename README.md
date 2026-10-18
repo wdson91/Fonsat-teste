@@ -24,6 +24,8 @@ Para a carga inicial de demonstração: `npm run prisma:seed`. Não repetir o se
 
 Em `backend`: `npx prisma validate` e `npm run build`.
 
+Testes: `npm test -- --runInBand`. Exigem o PostgreSQL local e permissão para criar/apagar bancos de teste descartáveis.
+
 ## Documentação
 
 - [Enunciado](docs/enunciado.pdf)
@@ -32,3 +34,4 @@ Em `backend`: `npx prisma validate` e `npm run build`.
 - [Fluxo das fases](docs/fluxo-das-fases.md)
 
 - [Relatório da fase 1](docs/relatorio-fase-1.md)
+- [Relatório da fase 2.1](docs/relatorio-fase-2.1.md)
