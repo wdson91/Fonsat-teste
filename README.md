@@ -4,7 +4,25 @@ Exercício técnico para gerir alocações de trabalhadores, registar horas e fa
 
 Stack: NestJS 10, Prisma 6 e PostgreSQL 16. Frontend previsto em Next.js.
 
-Esta branch é a base documental. Para executar o projeto, use uma branch de implementação conforme o fluxo abaixo.
+## Executar
+
+Com Docker e Node.js disponíveis, na raiz:
+
+```sh
+docker compose up -d
+cd backend
+cp .env.example .env
+npm ci
+npx prisma generate
+npx prisma migrate deploy
+npm run start:dev
+```
+
+Para a carga inicial de demonstração: `npm run prisma:seed`. Não repetir o seed num banco com dados a preservar.
+
+## Verificar
+
+Em `backend`: `npx prisma validate` e `npm run build`.
 
 ## Documentação
 
@@ -12,3 +30,5 @@ Esta branch é a base documental. Para executar o projeto, use uma branch de imp
 - [Plano de implementação](docs/PLANO_IMPLEMENTACAO.md)
 - [Decisões](DECISOES.md)
 - [Fluxo das fases](docs/fluxo-das-fases.md)
+
+- [Relatório da fase 1](docs/relatorio-fase-1.md)
