@@ -5,11 +5,13 @@ import { UsersService } from './users.service';
 @Controller('users')
 export class UsersController {
   constructor(private readonly personas: UsersService) {}
+
   @Public()
   @Get('personas')
   list() {
     return this.personas.list();
   }
+
   @Get('me')
   me(@CurrentPersona() persona: PersonaContext) {
     return persona;
