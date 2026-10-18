@@ -1,4 +1,5 @@
 import { Prisma } from '@prisma/client';
+import { ConflictException } from '@nestjs/common';
 import { dateInput } from './operations/dates';
 
 export function lisbonDay(instant: Date): string {
@@ -37,8 +38,13 @@ export function workAmount(
   minutes: number,
   hourlyRate: Prisma.Decimal.Value,
 ): Prisma.Decimal {
-  return new Prisma.Decimal(minutes)
+  const amount = new Prisma.Decimal(minutes)
     .div(60)
     .mul(hourlyRate)
     .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
+  if (amount.abs().gt('99999999.99'))
+    throw new ConflictException(
+      'Montante excede a capacidade decimal do documento',
+    );
+  return amount;
 }
