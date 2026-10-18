@@ -12,7 +12,6 @@ import {
   AllocationQuery,
   CreateAllocationDto,
   EndAllocationDto,
-  PageQuery,
   TransferDto,
   UsersQuery,
 } from './operations.dto';
@@ -29,7 +28,6 @@ const allocationSelect = {
   site: { select: { id: true, name: true } },
   trade: { select: { id: true, name: true } },
 } satisfies Prisma.AllocationSelect;
-type Tx = Prisma.TransactionClient;
 
 @Injectable()
 export class OperationsService {
@@ -37,237 +35,262 @@ export class OperationsService {
     private readonly prisma: PrismaService,
     private readonly scope: ScopeService,
   ) {}
-  private page<T>(q: PageQuery, data: T[], total: number) {
-    return {
-      data,
-      page: q.page,
-      pageSize: q.pageSize,
-      total,
-      totalPages: Math.ceil(total / q.pageSize),
-    };
-  }
-  private paging(q: PageQuery) {
-    const skip = (q.page - 1) * q.pageSize;
-    if (skip > 2147483647)
-      throw new BadRequestException('Página excede o limite suportado');
-    return { skip, take: q.pageSize };
-  }
-  private found<T>(value: T | null): T {
-    if (!value) throw new NotFoundException('Recurso não encontrado');
+
+  private requireResource<T>(value: T | null): T {
+    if (!value) {
+      throw new NotFoundException('Recurso não encontrado');
+    }
     return value;
   }
 
-  users(p: PersonaContext, q: UsersQuery) {
-    this.scope.roles(p, ['ADMIN', 'FOREMAN']);
-    return this.prisma.withTenant(p.companyId, async (tx) => {
-      const where = { companyId: p.companyId, role: q.role };
-      return this.page(
-        q,
-        await tx.user.findMany({
-          where,
-          select: { id: true, name: true, role: true },
-          orderBy: { id: 'asc' },
-          ...this.paging(q),
-        }),
-        await tx.user.count({ where }),
-      );
+  users(persona: PersonaContext, filters: UsersQuery) {
+    this.scope.requireRole(persona, ['ADMIN', 'FOREMAN']);
+    return this.prisma.withTenant(persona.companyId, async (transaction) => {
+      const where = { companyId: persona.companyId, role: filters.role };
+      return transaction.user.findMany({
+        where,
+        select: { id: true, name: true, role: true },
+        orderBy: { id: 'asc' },
+      });
     });
   }
-  clients(p: PersonaContext, q: PageQuery) {
-    this.scope.roles(p, ['ADMIN', 'FOREMAN']);
-    return this.prisma.withTenant(p.companyId, async (tx) => {
+
+  clients(persona: PersonaContext) {
+    this.scope.requireRole(persona, ['ADMIN', 'FOREMAN']);
+    return this.prisma.withTenant(persona.companyId, async (transaction) => {
       const where: Prisma.ClientWhereInput = {
-        companyId: p.companyId,
-        ...(p.role === 'FOREMAN'
-          ? { sites: { some: { companyId: p.companyId, foremanId: p.id } } }
-          : {}),
+        companyId: persona.companyId,
       };
-      return this.page(
-        q,
-        await tx.client.findMany({
-          where,
-          select: { id: true, name: true },
-          orderBy: { id: 'asc' },
-          ...this.paging(q),
-        }),
-        await tx.client.count({ where }),
-      );
+      if (persona.role === 'FOREMAN') {
+        where.sites = {
+          some: { companyId: persona.companyId, foremanId: persona.id },
+        };
+      }
+      return transaction.client.findMany({
+        where,
+        select: { id: true, name: true },
+        orderBy: { id: 'asc' },
+      });
     });
   }
-  trades(p: PersonaContext, q: PageQuery) {
-    this.scope.roles(p, ['ADMIN', 'FOREMAN', 'WORKER']);
-    return this.prisma.withTenant(p.companyId, async (tx) => {
-      const where = { companyId: p.companyId };
-      return this.page(
-        q,
-        await tx.trade.findMany({
-          where,
-          select: { id: true, name: true },
-          orderBy: { id: 'asc' },
-          ...this.paging(q),
-        }),
-        await tx.trade.count({ where }),
-      );
+
+  trades(persona: PersonaContext) {
+    this.scope.requireRole(persona, ['ADMIN', 'FOREMAN', 'WORKER']);
+    return this.prisma.withTenant(persona.companyId, async (transaction) => {
+      const where = { companyId: persona.companyId };
+      return transaction.trade.findMany({
+        where,
+        select: { id: true, name: true },
+        orderBy: { id: 'asc' },
+      });
     });
   }
-  sites(p: PersonaContext, q: PageQuery) {
-    this.scope.roles(p, ['ADMIN', 'FOREMAN', 'WORKER']);
-    return this.prisma.withTenant(p.companyId, async (tx) => {
-      const where = {
-        companyId: p.companyId,
-        ...(p.role === 'FOREMAN' ? { foremanId: p.id } : {}),
+
+  sites(persona: PersonaContext) {
+    this.scope.requireRole(persona, ['ADMIN', 'FOREMAN', 'WORKER']);
+    return this.prisma.withTenant(persona.companyId, async (transaction) => {
+      const where: Prisma.SiteWhereInput = {
+        companyId: persona.companyId,
       };
+      if (persona.role === 'FOREMAN') {
+        where.foremanId = persona.id;
+      }
       const select =
-        p.role === 'WORKER'
+        persona.role === 'WORKER'
           ? { id: true, name: true, address: true }
           : siteSelect;
-      return this.page(
-        q,
-        await tx.site.findMany({
-          where,
-          select,
-          orderBy: { id: 'asc' },
-          ...this.paging(q),
-        }),
-        await tx.site.count({ where }),
-      );
+      return transaction.site.findMany({
+        where,
+        select,
+        orderBy: { id: 'asc' },
+      });
     });
   }
-  async assignForeman(p: PersonaContext, id: number, foremanId: number) {
-    this.scope.roles(p, ['ADMIN']);
-    return this.prisma.withTenant(p.companyId, async (tx) => {
-      await this.lockSites(tx, p, [id]);
-      await this.validSite(tx, p, id);
-      await this.user(tx, p, foremanId, 'FOREMAN');
-      return tx.site.update({
-        where: { id },
+
+  async assignForeman(
+    persona: PersonaContext,
+    siteId: number,
+    foremanId: number,
+  ) {
+    this.scope.requireRole(persona, ['ADMIN']);
+    return this.prisma.withTenant(persona.companyId, async (transaction) => {
+      await this.lockSites(transaction, persona, [siteId]);
+      await this.requireManagedSite(transaction, persona, siteId);
+      await this.requireUser(transaction, persona, foremanId, 'FOREMAN');
+      return transaction.site.update({
+        where: { id: siteId },
         data: { foremanId },
         select: siteSelect,
       });
     });
   }
-  allocations(p: PersonaContext, q: AllocationQuery) {
-    this.scope.roles(p, ['ADMIN', 'FOREMAN', 'WORKER']);
-    const from = q.from ? dateInput(q.from) : undefined,
-      to = q.to ? dateInput(q.to) : undefined;
-    if (from && to && from >= to)
+
+  allocations(persona: PersonaContext, filters: AllocationQuery) {
+    this.scope.requireRole(persona, ['ADMIN', 'FOREMAN', 'WORKER']);
+    const from = filters.from ? dateInput(filters.from) : undefined;
+    const to = filters.to ? dateInput(filters.to) : undefined;
+    if (from && to && from >= to) {
       throw new BadRequestException('from deve ser anterior a to');
-    return this.prisma.withTenant(p.companyId, async (tx) => {
-      if (q.workerId) {
-        if (p.role === 'WORKER' && q.workerId !== p.id)
+    }
+    return this.prisma.withTenant(persona.companyId, async (transaction) => {
+      if (filters.workerId) {
+        if (persona.role === 'WORKER' && filters.workerId !== persona.id) {
           throw new NotFoundException('Recurso não encontrado');
-        await this.user(tx, p, q.workerId, 'WORKER');
+        }
+        await this.requireUser(
+          transaction,
+          persona,
+          filters.workerId,
+          'WORKER',
+        );
       }
-      if (q.siteId) {
-        if (p.role === 'WORKER')
-          this.found(
-            await tx.site.findFirst({
-              where: { id: q.siteId, companyId: p.companyId },
+      if (filters.siteId) {
+        if (persona.role === 'WORKER') {
+          this.requireResource(
+            await transaction.site.findFirst({
+              where: { id: filters.siteId, companyId: persona.companyId },
               select: { id: true },
             }),
           );
-        else await this.scope.site(tx, p, q.siteId);
+        } else {
+          await this.scope.requireSite(transaction, persona, filters.siteId);
+        }
       }
       const where: Prisma.AllocationWhereInput = {
-        companyId: p.companyId,
-        ...(q.workerId ? { workerId: q.workerId } : {}),
-        ...(q.siteId ? { siteId: q.siteId } : {}),
-        ...(p.role === 'WORKER' ? { workerId: p.id } : {}),
-        ...(p.role === 'FOREMAN'
-          ? { site: { companyId: p.companyId, foremanId: p.id } }
-          : {}),
-        ...(to ? { startDate: { lt: to } } : {}),
-        ...(from ? { OR: [{ endDate: null }, { endDate: { gt: from } }] } : {}),
+        companyId: persona.companyId,
       };
-      return this.page(
-        q,
-        await tx.allocation.findMany({
-          where,
-          select: allocationSelect,
-          orderBy: { id: 'asc' },
-          ...this.paging(q),
-        }),
-        await tx.allocation.count({ where }),
-      );
+      if (filters.workerId) {
+        where.workerId = filters.workerId;
+      }
+      if (filters.siteId) {
+        where.siteId = filters.siteId;
+      }
+      if (persona.role === 'WORKER') {
+        where.workerId = persona.id;
+      }
+      if (persona.role === 'FOREMAN') {
+        where.site = { companyId: persona.companyId, foremanId: persona.id };
+      }
+      if (to) {
+        where.startDate = { lt: to };
+      }
+      if (from) {
+        where.OR = [{ endDate: null }, { endDate: { gt: from } }];
+      }
+      return transaction.allocation.findMany({
+        where,
+        select: allocationSelect,
+        orderBy: { id: 'asc' },
+      });
     });
   }
-  create(p: PersonaContext, d: CreateAllocationDto) {
-    this.scope.roles(p, ['ADMIN', 'FOREMAN']);
-    const period = this.period(d);
-    return this.prisma.withTenant(p.companyId, async (tx) => {
-      await this.lockWorker(tx, p, d.workerId);
-      await this.lockSites(tx, p, [d.siteId]);
-      await this.validSite(tx, p, d.siteId);
-      await this.trade(tx, p, d.tradeId);
-      await this.noOverlap(tx, p, d.workerId, period.startDate, period.endDate);
-      return tx.allocation.create({
+
+  create(persona: PersonaContext, payload: CreateAllocationDto) {
+    this.scope.requireRole(persona, ['ADMIN', 'FOREMAN']);
+    const period = this.parsePeriod(payload);
+    return this.prisma.withTenant(persona.companyId, async (transaction) => {
+      await this.lockWorker(transaction, persona, payload.workerId);
+      await this.lockSites(transaction, persona, [payload.siteId]);
+      await this.requireManagedSite(transaction, persona, payload.siteId);
+      await this.requireTrade(transaction, persona, payload.tradeId);
+      await this.ensureNoOverlap(
+        transaction,
+        persona,
+        payload.workerId,
+        period.startDate,
+        period.endDate,
+      );
+      return transaction.allocation.create({
         data: {
-          companyId: p.companyId,
-          workerId: d.workerId,
-          siteId: d.siteId,
-          tradeId: d.tradeId,
+          companyId: persona.companyId,
+          workerId: payload.workerId,
+          siteId: payload.siteId,
+          tradeId: payload.tradeId,
           ...period,
         },
         select: allocationSelect,
       });
     });
   }
-  end(p: PersonaContext, id: number, d: EndAllocationDto) {
-    this.scope.roles(p, ['ADMIN', 'FOREMAN']);
-    const endDate = dateInput(d.endDate);
-    return this.prisma.withTenant(p.companyId, async (tx) => {
-      const allocation = await this.lockAllocation(tx, p, id);
-      if (allocation.endDate)
+
+  end(
+    persona: PersonaContext,
+    allocationId: number,
+    payload: EndAllocationDto,
+  ) {
+    this.scope.requireRole(persona, ['ADMIN', 'FOREMAN']);
+    const endDate = dateInput(payload.endDate);
+    return this.prisma.withTenant(persona.companyId, async (transaction) => {
+      const allocation = await this.lockAllocation(
+        transaction,
+        persona,
+        allocationId,
+      );
+      if (allocation.endDate) {
         throw new ConflictException('Alocação já encerrada');
-      if (endDate <= allocation.startDate)
+      }
+      if (endDate <= allocation.startDate) {
         throw new BadRequestException('endDate deve ser posterior a startDate');
-      await this.noOverlap(
-        tx,
-        p,
+      }
+      await this.ensureNoOverlap(
+        transaction,
+        persona,
         allocation.workerId,
         allocation.startDate,
         endDate,
-        id,
+        allocationId,
       );
-      return tx.allocation.update({
-        where: { id },
+      return transaction.allocation.update({
+        where: { id: allocationId },
         data: { endDate },
         select: allocationSelect,
       });
     });
   }
-  transfer(p: PersonaContext, id: number, d: TransferDto) {
-    this.scope.roles(p, ['ADMIN', 'FOREMAN']);
-    const period = this.period(d);
-    return this.prisma.withTenant(p.companyId, async (tx) => {
-      const allocation = await this.lockAllocation(tx, p, id, d.siteId);
-      if (allocation.endDate)
+
+  transfer(
+    persona: PersonaContext,
+    allocationId: number,
+    payload: TransferDto,
+  ) {
+    this.scope.requireRole(persona, ['ADMIN', 'FOREMAN']);
+    const period = this.parsePeriod(payload);
+    return this.prisma.withTenant(persona.companyId, async (transaction) => {
+      const allocation = await this.lockAllocation(
+        transaction,
+        persona,
+        allocationId,
+        payload.siteId,
+      );
+      if (allocation.endDate) {
         throw new ConflictException('Alocação já encerrada');
-      if (period.startDate <= allocation.startDate)
+      }
+      if (period.startDate <= allocation.startDate) {
         throw new BadRequestException(
           'Transferência deve ser posterior ao início original',
         );
-      await this.validSite(tx, p, d.siteId);
-      await this.trade(tx, p, d.tradeId);
-      await this.noOverlap(
-        tx,
-        p,
+      }
+      await this.requireManagedSite(transaction, persona, payload.siteId);
+      await this.requireTrade(transaction, persona, payload.tradeId);
+      await this.ensureNoOverlap(
+        transaction,
+        persona,
         allocation.workerId,
         period.startDate,
         period.endDate,
-        id,
+        allocationId,
       );
-      const previous = await tx.allocation.update({
-        where: { id },
+      const previous = await transaction.allocation.update({
+        where: { id: allocationId },
         data: { endDate: period.startDate },
         select: allocationSelect,
       });
-      const current = await tx.allocation.create({
+      const current = await transaction.allocation.create({
         data: {
-          companyId: p.companyId,
+          companyId: persona.companyId,
           workerId: allocation.workerId,
-          siteId: d.siteId,
-          tradeId: d.tradeId,
+          siteId: payload.siteId,
+          tradeId: payload.tradeId,
           ...period,
         },
         select: allocationSelect,
@@ -275,95 +298,142 @@ export class OperationsService {
       return { previous, current };
     });
   }
-  private period(d: TransferDto) {
-    const startDate = dateInput(d.startDate),
-      endDate = d.endDate === undefined ? null : dateInput(d.endDate);
-    if (endDate && endDate <= startDate)
+
+  private parsePeriod(payload: TransferDto) {
+    const startDate = dateInput(payload.startDate);
+    const endDate =
+      payload.endDate === undefined ? null : dateInput(payload.endDate);
+    if (endDate && endDate <= startDate) {
       throw new BadRequestException('endDate deve ser posterior a startDate');
+    }
     return { startDate, endDate };
   }
-  private async user(tx: Tx, p: PersonaContext, id: number, role: UserRole) {
-    return this.found(
-      await tx.user.findFirst({
-        where: { id, companyId: p.companyId, role },
+
+  private async requireUser(
+    transaction: Prisma.TransactionClient,
+    persona: PersonaContext,
+    userId: number,
+    role: UserRole,
+  ) {
+    return this.requireResource(
+      await transaction.user.findFirst({
+        where: { id: userId, companyId: persona.companyId, role },
         select: { id: true },
       }),
     );
   }
-  private async trade(tx: Tx, p: PersonaContext, id: number) {
-    return this.found(
-      await tx.trade.findFirst({
-        where: { id, companyId: p.companyId },
+
+  private async requireTrade(
+    transaction: Prisma.TransactionClient,
+    persona: PersonaContext,
+    tradeId: number,
+  ) {
+    return this.requireResource(
+      await transaction.trade.findFirst({
+        where: { id: tradeId, companyId: persona.companyId },
         select: { id: true },
       }),
     );
   }
-  private async validSite(tx: Tx, p: PersonaContext, id: number) {
-    const site = await this.scope.site(tx, p, id);
-    this.found(
-      await tx.client.findFirst({
-        where: { id: site.clientId, companyId: p.companyId },
+
+  private async requireManagedSite(
+    transaction: Prisma.TransactionClient,
+    persona: PersonaContext,
+    siteId: number,
+  ) {
+    const site = await this.scope.requireSite(transaction, persona, siteId);
+    this.requireResource(
+      await transaction.client.findFirst({
+        where: { id: site.clientId, companyId: persona.companyId },
         select: { id: true },
       }),
     );
-    await this.user(tx, p, site.foremanId, 'FOREMAN');
+    await this.requireUser(transaction, persona, site.foremanId, 'FOREMAN');
     return site;
   }
-  private async lockSites(tx: Tx, p: PersonaContext, ids: number[]) {
-    for (const id of [...new Set(ids)].sort((a, b) => a - b)) {
-      await tx.$queryRaw`SELECT "id" FROM "Site" WHERE "id"=${id} AND "companyId"=${p.companyId} FOR UPDATE`;
+
+  private async lockSites(
+    transaction: Prisma.TransactionClient,
+    persona: PersonaContext,
+    siteIds: number[],
+  ) {
+    for (const siteId of [...new Set(siteIds)].sort(
+      (left, right) => left - right,
+    )) {
+      await transaction.$queryRaw`
+        SELECT "id" FROM "Site"
+        WHERE "id" = ${siteId} AND "companyId" = ${persona.companyId}
+        FOR UPDATE
+      `;
     }
   }
-  private async lockWorker(tx: Tx, p: PersonaContext, id: number) {
-    await tx.$queryRaw`SELECT "id" FROM "User" WHERE "id"=${id} AND "companyId"=${p.companyId} FOR UPDATE`;
-    await this.user(tx, p, id, 'WORKER');
+
+  private async lockWorker(
+    transaction: Prisma.TransactionClient,
+    persona: PersonaContext,
+    workerId: number,
+  ) {
+    await transaction.$queryRaw`
+      SELECT "id" FROM "User"
+      WHERE "id" = ${workerId} AND "companyId" = ${persona.companyId}
+      FOR UPDATE
+    `;
+    await this.requireUser(transaction, persona, workerId, 'WORKER');
   }
+
   private async lockAllocation(
-    tx: Tx,
-    p: PersonaContext,
-    id: number,
-    destination?: number,
+    transaction: Prisma.TransactionClient,
+    persona: PersonaContext,
+    allocationId: number,
+    destinationSiteId?: number,
   ) {
     const where: Prisma.AllocationWhereInput = {
-      id,
-      companyId: p.companyId,
-      ...(p.role === 'FOREMAN'
-        ? { site: { companyId: p.companyId, foremanId: p.id } }
+      id: allocationId,
+      companyId: persona.companyId,
+      ...(persona.role === 'FOREMAN'
+        ? { site: { companyId: persona.companyId, foremanId: persona.id } }
         : {}),
     };
-    const first = this.found(
-      await tx.allocation.findFirst({ where, select: { workerId: true } }),
+    const allocationSummary = this.requireResource(
+      await transaction.allocation.findFirst({
+        where,
+        select: { workerId: true },
+      }),
     );
-    await this.lockWorker(tx, p, first.workerId);
-    const current = this.found(await tx.allocation.findFirst({ where }));
-    await this.lockSites(tx, p, [
-      current.siteId,
-      ...(destination ? [destination] : []),
+    await this.lockWorker(transaction, persona, allocationSummary.workerId);
+    const allocation = this.requireResource(
+      await transaction.allocation.findFirst({ where }),
+    );
+    await this.lockSites(transaction, persona, [
+      allocation.siteId,
+      ...(destinationSiteId ? [destinationSiteId] : []),
     ]);
-    await this.validSite(tx, p, current.siteId);
-    await this.trade(tx, p, current.tradeId);
-    return current;
+    await this.requireManagedSite(transaction, persona, allocation.siteId);
+    await this.requireTrade(transaction, persona, allocation.tradeId);
+    return allocation;
   }
-  private async noOverlap(
-    tx: Tx,
-    p: PersonaContext,
+
+  private async ensureNoOverlap(
+    transaction: Prisma.TransactionClient,
+    persona: PersonaContext,
     workerId: number,
-    start: Date,
-    end: Date | null,
-    except?: number,
+    startDate: Date,
+    endDate: Date | null,
+    excludedAllocationId?: number,
   ) {
     // O lock do trabalhador serializa todas as mutações, inclusive quando não há alocações ainda.
-    const overlap = await tx.allocation.findFirst({
+    const overlap = await transaction.allocation.findFirst({
       where: {
-        companyId: p.companyId,
+        companyId: persona.companyId,
         workerId,
-        ...(except ? { id: { not: except } } : {}),
-        ...(end ? { startDate: { lt: end } } : {}),
-        OR: [{ endDate: null }, { endDate: { gt: start } }],
+        ...(excludedAllocationId ? { id: { not: excludedAllocationId } } : {}),
+        ...(endDate ? { startDate: { lt: endDate } } : {}),
+        OR: [{ endDate: null }, { endDate: { gt: startDate } }],
       },
       select: { id: true },
     });
-    if (overlap)
+    if (overlap) {
       throw new ConflictException('Período sobreposto para o trabalhador');
+    }
   }
 }

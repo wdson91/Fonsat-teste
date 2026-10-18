@@ -23,61 +23,77 @@ export const workSelect = {
   status: true,
 } satisfies Prisma.WorkRecordSelect;
 
-/** Chamado dentro de withTenant, usando exclusivamente tx e contexto do guard. */
+/** Chamado dentro de withTenant, usando exclusivamente transaction e contexto do guard. */
 @Injectable()
 export class ScopeService {
-  roles(p: PersonaContext, roles: UserRole[]) {
-    if (!roles.includes(p.role))
+  requireRole(persona: PersonaContext, allowedRoles: UserRole[]) {
+    if (!allowedRoles.includes(persona.role)) {
       throw new ForbiddenException('Papel sem acesso');
+    }
   }
-  private found<T>(value: T | null): T {
-    if (!value) throw new NotFoundException('Recurso não encontrado');
+
+  private requireResource<T>(value: T | null): T {
+    if (!value) {
+      throw new NotFoundException('Recurso não encontrado');
+    }
     return value;
   }
-  async site(tx: Prisma.TransactionClient, p: PersonaContext, id: number) {
-    this.roles(p, ['ADMIN', 'FOREMAN']);
-    return this.found(
-      await tx.site.findFirst({
+
+  async requireSite(
+    transaction: Prisma.TransactionClient,
+    persona: PersonaContext,
+    siteId: number,
+  ) {
+    this.requireRole(persona, ['ADMIN', 'FOREMAN']);
+    return this.requireResource(
+      await transaction.site.findFirst({
         where: {
-          id,
-          companyId: p.companyId,
-          ...(p.role === 'FOREMAN' ? { foremanId: p.id } : {}),
+          id: siteId,
+          companyId: persona.companyId,
+          ...(persona.role === 'FOREMAN' ? { foremanId: persona.id } : {}),
         },
         select: siteSelect,
       }),
     );
   }
-  async workRecord(
-    tx: Prisma.TransactionClient,
-    p: PersonaContext,
-    id: number,
+
+  async requireWorkRecord(
+    transaction: Prisma.TransactionClient,
+    persona: PersonaContext,
+    workRecordId: number,
   ) {
-    this.roles(p, ['ADMIN', 'FOREMAN', 'WORKER']);
-    return this.found(
-      await tx.workRecord.findFirst({
+    this.requireRole(persona, ['ADMIN', 'FOREMAN', 'WORKER']);
+    return this.requireResource(
+      await transaction.workRecord.findFirst({
         where: {
-          id,
-          companyId: p.companyId,
-          ...(p.role === 'WORKER' ? { workerId: p.id } : {}),
-          ...(p.role === 'FOREMAN'
-            ? { site: { companyId: p.companyId, foremanId: p.id } }
+          id: workRecordId,
+          companyId: persona.companyId,
+          ...(persona.role === 'WORKER' ? { workerId: persona.id } : {}),
+          ...(persona.role === 'FOREMAN'
+            ? { site: { companyId: persona.companyId, foremanId: persona.id } }
             : {}),
         },
         select: workSelect,
       }),
     );
   }
-  async invoice(tx: Prisma.TransactionClient, p: PersonaContext, id: number) {
-    this.roles(p, ['ADMIN', 'CLIENT']);
-    if (p.role === 'CLIENT' && p.clientId === null)
+
+  async requireInvoice(
+    transaction: Prisma.TransactionClient,
+    persona: PersonaContext,
+    invoiceId: number,
+  ) {
+    this.requireRole(persona, ['ADMIN', 'CLIENT']);
+    if (persona.role === 'CLIENT' && persona.clientId === null) {
       throw new ForbiddenException('Persona sem cliente associado');
-    return this.found(
-      await tx.invoice.findFirst({
+    }
+    return this.requireResource(
+      await transaction.invoice.findFirst({
         where: {
-          id,
-          companyId: p.companyId,
-          ...(p.role === 'CLIENT'
-            ? { clientId: p.clientId!, status: 'ISSUED' as const }
+          id: invoiceId,
+          companyId: persona.companyId,
+          ...(persona.role === 'CLIENT'
+            ? { clientId: persona.clientId!, status: 'ISSUED' as const }
             : {}),
         },
         select: {

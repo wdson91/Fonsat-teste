@@ -2,7 +2,7 @@
 
 ## Fase 2.2 - obras e alocações
 
-Todas as rotas abaixo exigem `x-user-id`. CLIENT não acessa operações. Listagens retornam `{data,page,pageSize,total,totalPages}`, com `page=1`, `pageSize=50` e máximo 100; campos desconhecidos e valores inválidos geram 400. IDs de corpo são números inteiros positivos, não strings.
+Todas as rotas abaixo exigem `x-user-id`. CLIENT não acessa operações. Listagens retornam arrays diretos, ordenados por `id`, sem paginação ou limite silencioso. Parâmetros antigos `page` e `pageSize`, campos desconhecidos e valores inválidos geram 400. IDs de corpo são números inteiros positivos, não strings.
 
 | Rota                             | Acesso e dados                                                                                                         |
 | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
@@ -28,6 +28,16 @@ Exemplo: `POST /allocations` com `{"workerId":3,"siteId":1,"tradeId":2,"startDat
 
 ## Verificação e limites
 
-Build e Prisma validate aprovados; 25 testes de integração aprovados no conjunto das fases 2.1 e 2.2. Cobertura de escopos, referências de empresa/papel, mudança de encarregado, ofício diferente, histórico, rollback forçado, concorrência, datas de Lisboa e paginação. Foram usados bancos descartáveis com fixtures próprias, removidos após os testes, sem reset/seed do banco de desenvolvimento.
+Build e Prisma validate aprovados; 26 testes de integração aprovados no conjunto das fases 2.1 e 2.2. Cobertura de escopos, referências de empresa/papel, mudança de encarregado, ofício diferente, histórico, rollback forçado, concorrência, datas de Lisboa e consultas completas com filtros. Foram usados bancos descartáveis com fixtures próprias, removidos após os testes, sem reset/seed do banco de desenvolvimento.
 
 Comandos: `npx prisma validate`, `npm run build` e `npm test -- --runInBand`, em `backend`. O container local `fonsat_postgres` deve estar disponível e o login de teste deve poder criar/apagar bancos. Detalhes do contexto e RLS estão no [relatório da fase 2.1](relatorio-fase-2.1.md).
+
+## Simplificação das consultas e nomes
+
+A paginação foi removida de `/users`, `/clients`, `/trades`, `/sites` e `/allocations`: não há envelope, contagem adicional nem `skip`/`take`. Permanecem os filtros `role` em `/users` e `workerId`, `siteId`, `from`, `to` em `/allocations`. `/clients`, `/trades` e `/sites` não aceitam filtros; a whitelist rejeita qualquer parâmetro desconhecido.
+
+Nos serviços e controllers, `persona` identifica o utilizador resolvido pelo guard; `transaction` é o cliente Prisma da transação; `filters` são os filtros de consulta e `payload` os dados validados do corpo. `ScopeService.requireRole/requireSite/requireWorkRecord/requireInvoice` mantém as verificações de papel e recurso. Locks de trabalhador/obras, RLS, validações de referências e transferência atômica continuam obrigatórios.
+
+As listas completas são adequadas ao volume pequeno do exercício; o retorno cresce com os dados. Uma futura paginação deve ser uma mudança explícita de contrato, sem truncar respostas silenciosamente.
+
+Após a simplificação, build, Prisma validate e os 26 testes passaram, incluindo o retorno de mais de 100 trabalhadores sem truncamento, ordenação determinística, filtros e rejeição dos parâmetros antigos de paginação.

@@ -21,7 +21,7 @@ npm run prisma:seed
 npm run start:dev
 ```
 
-O seed é uma carga inicial de demonstração: não repetir num banco com dados a preservar. A fase 1 ainda não oferece endpoints de negócio. A conexão de desenvolvimento é privilegiada; operações de negócio devem usar `withTenant` e somente o cliente `tx` da transação para aplicar RLS.
+O seed é uma carga inicial de demonstração: não repetir num banco com dados a preservar. A fase 1 ainda não oferece endpoints de negócio. A conexão de desenvolvimento é privilegiada; operações de negócio devem usar `withTenant` e somente o cliente `transaction` da transação para aplicar RLS.
 
 Validação da base, dentro de `backend`: `npx prisma validate` e `npm run build`. Não há testes de identidade/autorização nesta fase.
 

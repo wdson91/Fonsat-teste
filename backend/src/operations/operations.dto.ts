@@ -10,37 +10,73 @@ const queryNumber = () =>
       : value,
   );
 
-export class PageQuery {
-  @optional() @queryNumber() @IsInt() @Min(1) @Max(2147483647) page = 1;
-  @optional() @queryNumber() @IsInt() @Min(1) @Max(100) pageSize = 50;
+// Sem propriedades: a whitelist global rejeita qualquer filtro nestas rotas.
+export class NoFiltersQuery {}
+
+export class UsersQuery {
+  @optional()
+  @IsIn(['WORKER', 'FOREMAN'])
+  role: 'WORKER' | 'FOREMAN' = 'WORKER';
 }
-export class UsersQuery extends PageQuery {
-  @optional() @IsIn(['WORKER', 'FOREMAN']) role: 'WORKER' | 'FOREMAN' =
-    'WORKER';
-}
-export class AllocationQuery extends PageQuery {
+
+export class AllocationQuery {
   @optional()
   @queryNumber()
   @IsInt()
   @Min(1)
   @Max(2147483647)
   workerId?: number;
-  @optional() @queryNumber() @IsInt() @Min(1) @Max(2147483647) siteId?: number;
-  @optional() @IsDateInput() from?: string;
-  @optional() @IsDateInput() to?: string;
+
+  @optional()
+  @queryNumber()
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  siteId?: number;
+
+  @optional()
+  @IsDateInput()
+  from?: string;
+
+  @optional()
+  @IsDateInput()
+  to?: string;
 }
+
 export class ForemanDto {
-  @IsInt() @Min(1) @Max(2147483647) foremanId: number;
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  foremanId: number;
 }
+
 export class TransferDto {
-  @IsInt() @Min(1) @Max(2147483647) siteId: number;
-  @IsInt() @Min(1) @Max(2147483647) tradeId: number;
-  @IsDateInput() startDate: string;
-  @optional() @IsDateInput() endDate?: string;
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  siteId: number;
+
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  tradeId: number;
+
+  @IsDateInput()
+  startDate: string;
+
+  @optional()
+  @IsDateInput()
+  endDate?: string;
 }
+
 export class CreateAllocationDto extends TransferDto {
-  @IsInt() @Min(1) @Max(2147483647) workerId: number;
+  @IsInt()
+  @Min(1)
+  @Max(2147483647)
+  workerId: number;
 }
+
 export class EndAllocationDto {
-  @IsDateInput() endDate: string;
+  @IsDateInput()
+  endDate: string;
 }

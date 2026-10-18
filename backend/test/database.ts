@@ -1,7 +1,7 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient, UserRole } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
 
 /** Banco descartável: nunca executa seed/reset nem escreve dados no banco de desenvolvimento. */
@@ -59,69 +59,73 @@ export async function testDatabase() {
   };
 }
 
-export async function fixtures(p: PrismaService) {
-  const a = await p.company.create({ data: { name: 'Empresa A teste' } });
-  const b = await p.company.create({ data: { name: 'Empresa B teste' } });
-  const client = await p.client.create({
-    data: { companyId: a.id, name: 'Cliente A' },
+export async function fixtures(prisma: PrismaService) {
+  const companyA = await prisma.company.create({
+    data: { name: 'Empresa A teste' },
   });
-  const client2 = await p.client.create({
-    data: { companyId: a.id, name: 'Outro cliente A' },
+  const companyB = await prisma.company.create({
+    data: { name: 'Empresa B teste' },
   });
-  const foreignClient = await p.client.create({
-    data: { companyId: b.id, name: 'Cliente B' },
+  const client = await prisma.client.create({
+    data: { companyId: companyA.id, name: 'Cliente A' },
   });
-  const trade = await p.trade.create({
-    data: { companyId: a.id, name: 'Pedreiro' },
+  const client2 = await prisma.client.create({
+    data: { companyId: companyA.id, name: 'Outro cliente A' },
   });
-  const trade2 = await p.trade.create({
-    data: { companyId: a.id, name: 'Eletricista' },
+  const foreignClient = await prisma.client.create({
+    data: { companyId: companyB.id, name: 'Cliente B' },
   });
-  const foreignTrade = await p.trade.create({
-    data: { companyId: b.id, name: 'Pedreiro B' },
+  const trade = await prisma.trade.create({
+    data: { companyId: companyA.id, name: 'Pedreiro' },
+  });
+  const trade2 = await prisma.trade.create({
+    data: { companyId: companyA.id, name: 'Eletricista' },
+  });
+  const foreignTrade = await prisma.trade.create({
+    data: { companyId: companyB.id, name: 'Pedreiro B' },
   });
   const user = (
     companyId: number,
     name: string,
-    role: any,
+    role: UserRole,
     clientId?: number,
-  ) => p.user.create({ data: { companyId, name, role, clientId } });
-  const admin = await user(a.id, 'Admin', 'ADMIN');
-  const foreman = await user(a.id, 'Encarregado', 'FOREMAN');
-  const foreman2 = await user(a.id, 'Outro encarregado', 'FOREMAN');
-  const worker = await user(a.id, 'Trabalhador', 'WORKER');
-  const worker2 = await user(a.id, 'Outro trabalhador', 'WORKER');
-  const customer = await user(a.id, 'Cliente', 'CLIENT', client.id);
-  const foreignAdmin = await user(b.id, 'Admin B', 'ADMIN');
-  const foreignForeman = await user(b.id, 'Encarregado B', 'FOREMAN');
-  const foreignWorker = await user(b.id, 'Trabalhador B', 'WORKER');
-  const site = await p.site.create({
+  ) => prisma.user.create({ data: { companyId, name, role, clientId } });
+  const admin = await user(companyA.id, 'Admin', 'ADMIN');
+  const foreman = await user(companyA.id, 'Encarregado', 'FOREMAN');
+  const foreman2 = await user(companyA.id, 'Outro encarregado', 'FOREMAN');
+  const worker = await user(companyA.id, 'Trabalhador', 'WORKER');
+  const worker2 = await user(companyA.id, 'Outro trabalhador', 'WORKER');
+  const customer = await user(companyA.id, 'Cliente', 'CLIENT', client.id);
+  const foreignAdmin = await user(companyB.id, 'Admin B', 'ADMIN');
+  const foreignForeman = await user(companyB.id, 'Encarregado B', 'FOREMAN');
+  const foreignWorker = await user(companyB.id, 'Trabalhador B', 'WORKER');
+  const site = await prisma.site.create({
     data: {
-      companyId: a.id,
+      companyId: companyA.id,
       name: 'Obra A',
       clientId: client.id,
       foremanId: foreman.id,
     },
   });
-  const otherSite = await p.site.create({
+  const otherSite = await prisma.site.create({
     data: {
-      companyId: a.id,
+      companyId: companyA.id,
       name: 'Outra obra',
       clientId: client2.id,
       foremanId: foreman2.id,
     },
   });
-  const foreignSite = await p.site.create({
+  const foreignSite = await prisma.site.create({
     data: {
-      companyId: b.id,
+      companyId: companyB.id,
       name: 'Obra B',
       clientId: foreignClient.id,
       foremanId: foreignForeman.id,
     },
   });
-  const work = await p.workRecord.create({
+  const work = await prisma.workRecord.create({
     data: {
-      companyId: a.id,
+      companyId: companyA.id,
       workerId: worker.id,
       siteId: site.id,
       tradeId: trade.id,
@@ -133,9 +137,9 @@ export async function fixtures(p: PrismaService) {
       createdById: worker.id,
     },
   });
-  const invoice = await p.invoice.create({
+  const invoice = await prisma.invoice.create({
     data: {
-      companyId: a.id,
+      companyId: companyA.id,
       clientId: client.id,
       year: 2026,
       month: 10,
@@ -144,18 +148,18 @@ export async function fixtures(p: PrismaService) {
       issuedAt: new Date(),
     },
   });
-  const draft = await p.invoice.create({
+  const draft = await prisma.invoice.create({
     data: {
-      companyId: a.id,
+      companyId: companyA.id,
       clientId: client.id,
       year: 2026,
       month: 10,
       totalAmount: 20,
     },
   });
-  const otherInvoice = await p.invoice.create({
+  const otherInvoice = await prisma.invoice.create({
     data: {
-      companyId: a.id,
+      companyId: companyA.id,
       clientId: client2.id,
       year: 2026,
       month: 10,
@@ -164,8 +168,8 @@ export async function fixtures(p: PrismaService) {
     },
   });
   return {
-    a,
-    b,
+    companyA,
+    companyB,
     client,
     client2,
     foreignClient,

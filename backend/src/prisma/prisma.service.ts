@@ -21,7 +21,7 @@ export class PrismaService
    */
   async withTenant<T>(
     companyId: number,
-    fn: (tx: Prisma.TransactionClient) => Promise<T>,
+    operation: (transaction: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
     if (
       !Number.isSafeInteger(companyId) ||
@@ -30,10 +30,12 @@ export class PrismaService
     ) {
       throw new Error('Contexto de empresa inválido');
     }
-    return this.$transaction(async (tx) => {
-      await tx.$executeRawUnsafe(`SET LOCAL ROLE app_tenant_user;`);
-      await tx.$queryRaw`SELECT set_config('app.current_company_id', ${String(companyId)}, true);`;
-      return fn(tx);
+    return this.$transaction(async (transaction) => {
+      await transaction.$executeRawUnsafe(`SET LOCAL ROLE app_tenant_user;`);
+      await transaction.$queryRaw`
+        SELECT set_config('app.current_company_id', ${String(companyId)}, true)
+      `;
+      return operation(transaction);
     });
   }
 }

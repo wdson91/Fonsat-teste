@@ -23,9 +23,11 @@ export const Public = () => SetMetadata(PUBLIC_ROUTE, true);
 export const Roles = (...roles: UserRole[]) =>
   SetMetadata(REQUIRED_ROLES, roles);
 export const CurrentPersona = createParamDecorator(
-  (_: unknown, ctx: ExecutionContext) => {
-    const persona = ctx.switchToHttp().getRequest<PersonaRequest>().persona;
-    if (!persona) throw new UnauthorizedException('Persona não identificada');
+  (_: unknown, context: ExecutionContext) => {
+    const persona = context.switchToHttp().getRequest<PersonaRequest>().persona;
+    if (!persona) {
+      throw new UnauthorizedException('Persona não identificada');
+    }
     return persona;
   },
 );

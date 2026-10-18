@@ -10,6 +10,7 @@ export function dateInput(value: unknown): Date {
   ) {
     throw new BadRequestException('Data inválida');
   }
+
   if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
     const target = Date.parse(value + 'T00:00:00Z');
     let timestamp = target;
@@ -23,11 +24,11 @@ export function dateInput(value: unknown): Date {
       second: '2-digit',
       hourCycle: 'h23',
     });
-    for (let i = 0; i < 3; i++) {
+    for (let attempt = 0; attempt < 3; attempt++) {
       const parts = Object.fromEntries(
         formatter
           .formatToParts(new Date(timestamp))
-          .map((p) => [p.type, p.value]),
+          .map((part) => [part.type, part.value]),
       );
       const local = Date.UTC(
         +parts.year,
@@ -41,6 +42,7 @@ export function dateInput(value: unknown): Date {
     }
     return new Date(timestamp);
   }
+
   if (
     !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,3})?(Z|[+-]\d{2}:\d{2})$/.test(
       value,
@@ -51,6 +53,7 @@ export function dateInput(value: unknown): Date {
       'Data/hora deve incluir segundos e fuso (Z ou offset)',
     );
   }
+
   return new Date(value);
 }
 export function IsDateInput() {

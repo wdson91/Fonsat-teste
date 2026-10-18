@@ -5,6 +5,7 @@ import { PersonaContext } from './persona.context';
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
+
   async resolve(header: unknown): Promise<Readonly<PersonaContext>> {
     if (
       typeof header !== 'string' ||
@@ -27,9 +28,12 @@ export class UsersService {
         clientId: true,
       },
     });
-    if (!user) throw new UnauthorizedException('Persona desconhecida');
+    if (!user) {
+      throw new UnauthorizedException('Persona desconhecida');
+    }
     return Object.freeze(user);
   }
+
   list() {
     // Exceção pública, com projeção limitada, para o seletor de demonstração.
     return this.prisma.user.findMany({
