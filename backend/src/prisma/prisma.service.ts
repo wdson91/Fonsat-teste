@@ -2,7 +2,10 @@ import { Injectable, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { Prisma, PrismaClient } from '@prisma/client';
 
 @Injectable()
-export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnModuleDestroy
+{
   async onModuleInit() {
     await this.$connect();
   }
@@ -20,9 +23,16 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
     companyId: number,
     fn: (tx: Prisma.TransactionClient) => Promise<T>,
   ): Promise<T> {
+    if (
+      !Number.isSafeInteger(companyId) ||
+      companyId <= 0 ||
+      companyId > 2147483647
+    ) {
+      throw new Error('Contexto de empresa inválido');
+    }
     return this.$transaction(async (tx) => {
       await tx.$executeRawUnsafe(`SET LOCAL ROLE app_tenant_user;`);
-      await tx.$executeRaw`SELECT set_config('app.current_company_id', ${String(companyId)}, true);`;
+      await tx.$queryRaw`SELECT set_config('app.current_company_id', ${String(companyId)}, true);`;
       return fn(tx);
     });
   }

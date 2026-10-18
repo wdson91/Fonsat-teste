@@ -12,7 +12,7 @@
     "prisma:seed": "prisma db seed",
     "test": "jest",
     "test:watch": "jest --watch",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --runInBand"
   },
   "prisma": {
     "seed": "ts-node prisma/seed.ts"
