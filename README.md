@@ -35,3 +35,4 @@ Testes: `npm test -- --runInBand`. Exigem o PostgreSQL local e permissão para c
 
 - [Relatório da fase 1](docs/relatorio-fase-1.md)
 - [Relatório da fase 2.1](docs/relatorio-fase-2.1.md)
+- [Relatório da fase 2.2](docs/relatorio-fase-2.2.md)
