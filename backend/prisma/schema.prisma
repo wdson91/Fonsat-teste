@@ -1,0 +1,237 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  WORKER
+  FOREMAN
+  ADMIN
+  CLIENT
+}
+
+enum WorkRecordStatus {
+  ACTIVE
+  PENDING_RATE
+  SUPERSEDED
+}
+
+enum InvoiceType {
+  REGULAR
+  CREDIT_NOTE
+  DEBIT_NOTE
+}
+
+enum InvoiceStatus {
+  DRAFT
+  ISSUED
+}
+
+model Company {
+  id          Int                    @id @default(autoincrement())
+  name        String
+  createdAt   DateTime               @default(now())
+  users       User[]
+  trades      Trade[]
+  clients     Client[]
+  sites       Site[]
+  allocations Allocation[]
+  rates       ClientRate[]
+  workRecords WorkRecord[]
+  invoices    Invoice[]
+  eventDedups AttendanceEventDedup[]
+}
+
+model Trade {
+  id           Int           @id @default(autoincrement())
+  companyId    Int
+  name         String
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  workers      User[]        @relation("WorkerDefaultTrade")
+  allocations  Allocation[]
+  rates        ClientRate[]
+  workRecords  WorkRecord[]
+  invoiceLines InvoiceLine[]
+
+  @@unique([companyId, name])
+}
+
+model Client {
+  id        Int          @id @default(autoincrement())
+  companyId Int
+  name      String
+  company   Company      @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  users     User[]       @relation("ClientUsers")
+  sites     Site[]
+  rates     ClientRate[]
+  invoices  Invoice[]
+
+  @@unique([companyId, name])
+}
+
+model User {
+  id             Int          @id @default(autoincrement())
+  companyId      Int
+  name           String
+  role           UserRole
+  defaultTradeId Int?
+  clientId       Int?
+  company        Company      @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  defaultTrade   Trade?       @relation("WorkerDefaultTrade", fields: [defaultTradeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  client         Client?      @relation("ClientUsers", fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  managedSites   Site[]       @relation("ForemanSites")
+  allocations    Allocation[] @relation("WorkerAllocations")
+  workRecords    WorkRecord[] @relation("WorkerRecords")
+  createdRecords WorkRecord[] @relation("RecordCreator")
+}
+
+model Site {
+  id           Int           @id @default(autoincrement())
+  companyId    Int
+  clientId     Int
+  foremanId    Int
+  name         String
+  address      String?
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  client       Client        @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  foreman      User          @relation("ForemanSites", fields: [foremanId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  allocations  Allocation[]
+  workRecords  WorkRecord[]
+  invoiceLines InvoiceLine[]
+}
+
+model Allocation {
+  id        Int       @id @default(autoincrement())
+  companyId Int
+  siteId    Int
+  workerId  Int
+  tradeId   Int
+  startDate DateTime
+  endDate   DateTime?
+  createdAt DateTime  @default(now())
+  company   Company   @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  site      Site      @relation(fields: [siteId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  worker    User      @relation("WorkerAllocations", fields: [workerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  trade     Trade     @relation(fields: [tradeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+}
+
+model ClientRate {
+  id           Int           @id @default(autoincrement())
+  companyId    Int
+  clientId     Int
+  tradeId      Int
+  hourlyRate   Decimal       @db.Decimal(10, 2)
+  validFrom    DateTime
+  validTo      DateTime?
+  createdAt    DateTime      @default(now())
+  company      Company       @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  client       Client        @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  trade        Trade         @relation(fields: [tradeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  workRecords  WorkRecord[]
+  invoiceLines InvoiceLine[]
+}
+
+model WorkRecord {
+  id                       Int                     @id @default(autoincrement())
+  companyId                Int
+  workerId                 Int
+  siteId                   Int
+  tradeId                  Int
+  workDate                 DateTime
+  eventsJson               Json
+  totalMinutes             Int
+  clientRateId             Int?
+  hourlyRateSnapshot       Decimal?                @db.Decimal(10, 2)
+  totalAmount              Decimal?                @db.Decimal(10, 2)
+  status                   WorkRecordStatus        @default(ACTIVE)
+  replacesRecordId         Int?                    @unique
+  correctsInvoicedRecordId Int?
+  correctionReason         String?
+  createdById              Int
+  createdAt                DateTime                @default(now())
+
+  company                  Company                 @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  worker                   User                    @relation("WorkerRecords", fields: [workerId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  site                     Site                    @relation(fields: [siteId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  trade                    Trade                   @relation(fields: [tradeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  clientRate               ClientRate?             @relation(fields: [clientRateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  createdBy                User                    @relation("RecordCreator", fields: [createdById], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  replacesRecord           WorkRecord?             @relation("RecordReplacement", fields: [replacesRecordId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  replacedByRecord         WorkRecord?             @relation("RecordReplacement")
+
+  correctsInvoicedRecord   WorkRecord?             @relation("InvoicedRecordCorrection", fields: [correctsInvoicedRecordId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  correctedByRecords       WorkRecord[]            @relation("InvoicedRecordCorrection")
+
+  invoiceLineLinks         InvoiceLineWorkRecord[]
+  eventDedups              AttendanceEventDedup[]
+}
+
+model AttendanceEventDedup {
+  id           String     @id
+  companyId    Int
+  shiftId      String
+  workRecordId Int
+  createdAt    DateTime   @default(now())
+  company      Company    @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  workRecord   WorkRecord @relation(fields: [workRecordId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+}
+
+model Invoice {
+  id              Int           @id @default(autoincrement())
+  companyId       Int
+  clientId        Int
+  year            Int
+  month           Int
+  type            InvoiceType   @default(REGULAR)
+  status          InvoiceStatus @default(DRAFT)
+  parentInvoiceId Int?
+  notes           String?
+  totalAmount     Decimal       @db.Decimal(10, 2)
+  issuedAt        DateTime?
+  createdAt       DateTime      @default(now())
+
+  company         Company       @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  client          Client        @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  parentInvoice   Invoice?      @relation("InvoiceAdjustments", fields: [parentInvoiceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  adjustmentNotes Invoice[]     @relation("InvoiceAdjustments")
+  lines           InvoiceLine[]
+}
+
+model InvoiceLine {
+  id                    Int                     @id @default(autoincrement())
+  invoiceId             Int
+  siteId                Int
+  siteNameSnapshot      String
+  tradeId               Int
+  tradeNameSnapshot     String
+  clientRateId          Int
+  hourlyRateSnapshot    Decimal                 @db.Decimal(10, 2)
+  rateValidFromSnapshot DateTime
+  rateValidToSnapshot   DateTime?
+  totalMinutes          Int
+  lineAmount            Decimal                 @db.Decimal(10, 2)
+  description           String?
+
+  invoice               Invoice                 @relation(fields: [invoiceId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  site                  Site                    @relation(fields: [siteId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  trade                 Trade                   @relation(fields: [tradeId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  clientRate            ClientRate              @relation(fields: [clientRateId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  workRecordLinks       InvoiceLineWorkRecord[]
+}
+
+model InvoiceLineWorkRecord {
+  id            Int         @id @default(autoincrement())
+  invoiceLineId Int
+  workRecordId  Int
+  createdAt     DateTime    @default(now())
+
+  invoiceLine   InvoiceLine @relation(fields: [invoiceLineId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  workRecord    WorkRecord  @relation(fields: [workRecordId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+
+  @@unique([invoiceLineId, workRecordId])
+}
