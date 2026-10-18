@@ -269,4 +269,64 @@ describe('fase 2.4 - eventos de presença', () => {
       }),
     ).not.toBeNull();
   });
+
+  it('arredonda uma vez por grupo e aceita par antigo parcial no lote misto', async () => {
+    const first = shift(
+      testData.site.id,
+      testData.trade.id,
+      '2020-01-08T08:00:00Z',
+      '2020-01-08T08:00:31Z',
+    );
+    const second = shift(
+      testData.site.id,
+      testData.trade.id,
+      '2020-01-08T09:00:00Z',
+      '2020-01-08T09:00:31Z',
+    );
+    const rounded = await send([...first, ...second]).expect(201);
+    expect(rounded.body.records[0].totalMinutes).toBe(1);
+    const third = shift(
+      testData.site.id,
+      testData.trade.id,
+      '2020-01-08T10:00:00Z',
+      '2020-01-08T10:01:00Z',
+    );
+    const mixed = await send([first[0], ...third]).expect(201);
+    expect(mixed.body.ignoredEventIds).toEqual([first[0].id]);
+    expect(mixed.body.records[0].totalMinutes).toBe(2);
+  });
+
+  it('falha no segundo dedup reverte registro e primeiro evento', async () => {
+    const events = shift(
+      testData.site.id,
+      testData.trade.id,
+      '2020-01-09T08:00:00Z',
+      '2020-01-09T09:00:00Z',
+    );
+    const before = [
+      await database.prisma.workRecord.count(),
+      await database.prisma.attendanceEventDedup.count(),
+    ];
+    await database.prisma.$executeRawUnsafe(
+      `CREATE FUNCTION test_dedup_failure() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN IF NEW."id" = '${events[1].id}' THEN RAISE EXCEPTION 'falha teste'; END IF; RETURN NEW; END $$`,
+    );
+    await database.prisma.$executeRawUnsafe(
+      'CREATE TRIGGER test_dedup_failure BEFORE INSERT ON "AttendanceEventDedup" FOR EACH ROW EXECUTE FUNCTION test_dedup_failure()',
+    );
+    try {
+      await send(events).expect(500);
+      expect([
+        await database.prisma.workRecord.count(),
+        await database.prisma.attendanceEventDedup.count(),
+      ]).toEqual(before);
+    } finally {
+      await database.prisma.$executeRawUnsafe(
+        'DROP TRIGGER test_dedup_failure ON "AttendanceEventDedup"',
+      );
+      await database.prisma.$executeRawUnsafe(
+        'DROP FUNCTION test_dedup_failure()',
+      );
+    }
+    await send(events).expect(201);
+  });
 });
