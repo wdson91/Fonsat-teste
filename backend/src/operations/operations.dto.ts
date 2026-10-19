@@ -1,5 +1,5 @@
 import { Transform } from 'class-transformer';
-import { IsIn, IsInt, Max, Min, ValidateIf } from 'class-validator';
+import { IsIn, IsInt, Matches, Max, Min, ValidateIf } from 'class-validator';
 import { IsDateInput } from './dates';
 
 const optional = () => ValidateIf((_, value) => value !== undefined);
@@ -35,10 +35,12 @@ export class AllocationQuery {
   siteId?: number;
 
   @optional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
   @IsDateInput()
   from?: string;
 
   @optional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
   @IsDateInput()
   to?: string;
 }
@@ -61,10 +63,12 @@ export class TransferDto {
   @Max(2147483647)
   tradeId: number;
 
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
   @IsDateInput()
   startDate: string;
 
   @optional()
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
   @IsDateInput()
   endDate?: string;
 }
@@ -77,6 +81,7 @@ export class CreateAllocationDto extends TransferDto {
 }
 
 export class EndAllocationDto {
+  @Matches(/^\d{4}-\d{2}-\d{2}$/)
   @IsDateInput()
   endDate: string;
 }

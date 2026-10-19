@@ -156,7 +156,7 @@ async function main() {
     }),
   ]);
 
-  // Alocações iniciais
+  // Alocações iniciais (por dia em Europe/Lisbon)
   await Promise.all([
     prisma.allocation.create({
       data: {
@@ -164,7 +164,7 @@ async function main() {
         siteId: siteBoavista.id,
         workerId: workerManuel.id,
         tradeId: tradePedreiro.id,
-        startDate: new Date('2026-09-01T00:00:00.000Z'),
+        startDate: new Date('2026-08-31T23:00:00.000Z'),
       },
     }),
     prisma.allocation.create({
@@ -173,7 +173,7 @@ async function main() {
         siteId: siteBoavista.id,
         workerId: workerRui.id,
         tradeId: tradeServente.id,
-        startDate: new Date('2026-09-01T00:00:00.000Z'),
+        startDate: new Date('2026-08-31T23:00:00.000Z'),
       },
     }),
     prisma.allocation.create({
@@ -182,7 +182,7 @@ async function main() {
         siteId: sitePonteGaia.id,
         workerId: workerTiago.id,
         tradeId: tradeEletricista.id,
-        startDate: new Date('2026-09-01T00:00:00.000Z'),
+        startDate: new Date('2026-08-31T23:00:00.000Z'),
       },
     }),
   ]);
@@ -791,7 +791,7 @@ async function main() {
       siteId: siteFaro.id,
       workerId: workerSul.id,
       tradeId: tradeCarpinteiro.id,
-      startDate: new Date('2026-09-01T00:00:00.000Z'),
+      startDate: new Date('2026-08-31T23:00:00.000Z'),
     },
   });
 

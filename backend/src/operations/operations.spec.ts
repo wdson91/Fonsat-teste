@@ -204,7 +204,13 @@ describe('fase 2.2: obras e alocacoes com PostgreSQL', () => {
     expect(dateInput('2026-10-26').toISOString()).toBe(
       '2026-10-26T00:00:00.000Z',
     );
-    for (const startDate of ['2026-02-30', '2026-10-01T10:00:00', 'nada', null])
+    for (const startDate of [
+      '2026-02-30',
+      '2026-10-01T10:00:00',
+      '2026-10-01T12:00:00+01:00',
+      'nada',
+      null,
+    ])
       await create(testData.admin, { startDate }).expect(400);
     await create(testData.admin, { startDate: '0000-01-01' }).expect(400);
     await create(testData.admin, { endDate: '2026-10-01' }).expect(400);
@@ -214,7 +220,7 @@ describe('fase 2.2: obras e alocacoes com PostgreSQL', () => {
       endDate: '2026-10-03',
     }).expect(201);
     await create(testData.admin, {
-      startDate: '2026-10-01T12:00:00+01:00',
+      startDate: '2026-10-01',
       endDate: '2026-10-02',
     }).expect(409);
     const period = await get(

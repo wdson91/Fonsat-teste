@@ -11,16 +11,22 @@ import type {
   Site,
   UserOption,
 } from '../lib/contracts';
-import { displayDay, lisbonDay, lisbonTime } from '../lib/lisbon';
+import {
+  calendarShift,
+  displayDay,
+  lisbonDay,
+  lisbonTime,
+  weekStart,
+} from '../lib/lisbon';
 import {
   correctionTurns,
   correctedEvents,
-  formTimestamp,
   type CorrectionTurn,
 } from '../lib/corrections';
 import { currentRecords } from '../lib/records';
 
 const emptyFilters = { siteId: '', workerId: '', from: '', to: '' };
+const weekdayLabels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 interface Catalog {
   sites: Site[];
   workers: UserOption[];
@@ -47,6 +53,13 @@ interface AllocationAction {
   startDate: string;
   endDate: string;
 }
+interface GridCellSelection {
+  worker: UserOption;
+  day: string;
+  activeAllocation: Allocation | null;
+  siteId: string;
+  tradeId: string;
+}
 interface CorrectionEditor {
   record: AttendanceRecord;
   siteId: string;
@@ -55,6 +68,14 @@ interface CorrectionEditor {
   editTimes: boolean;
   day: string;
   turns: CorrectionTurn[];
+}
+
+function parseWorkerLabel(name: string, fallbackTrade?: string) {
+  const match = name.match(/^(.*?)\s*\(([^)]+)\)\s*$/);
+  return {
+    shortName: match ? match[1].trim() : name,
+    habitualTrade: match ? match[2].trim() : (fallbackTrade ?? 'Equipa'),
+  };
 }
 
 export function SitesPage() {
@@ -80,6 +101,11 @@ export function SitesPage() {
   });
   const [allocationAction, setAllocationAction] =
     useState<AllocationAction | null>(null);
+  const [gridWeek, setGridWeek] = useState(() => weekStart(lisbonDay()));
+  const [gridSiteFilter, setGridSiteFilter] = useState('');
+  const [selectedCell, setSelectedCell] = useState<GridCellSelection | null>(
+    null,
+  );
   const [correction, setCorrection] = useState<CorrectionEditor | null>(null);
   const [rateRecord, setRateRecord] = useState<AttendanceRecord | null>(null);
   const [rateReason, setRateReason] = useState('');
@@ -201,9 +227,9 @@ export function SitesPage() {
         workerId: Number(allocationForm.workerId),
         siteId: Number(allocationForm.siteId),
         tradeId: Number(allocationForm.tradeId),
-        startDate: formTimestamp(allocationForm.startDate),
+        startDate: allocationForm.startDate,
         ...(allocationForm.endDate
-          ? { endDate: formTimestamp(allocationForm.endDate) }
+          ? { endDate: allocationForm.endDate }
           : {}),
       };
       if (await save('/allocations', payload)) {
@@ -229,13 +255,13 @@ export function SitesPage() {
     try {
       const payload =
         allocationAction.mode === 'end'
-          ? { endDate: formTimestamp(allocationAction.endDate) }
+          ? { endDate: allocationAction.endDate }
           : {
               siteId: Number(allocationAction.siteId),
               tradeId: Number(allocationAction.tradeId),
-              startDate: formTimestamp(allocationAction.startDate),
+              startDate: allocationAction.startDate,
               ...(allocationAction.endDate
-                ? { endDate: formTimestamp(allocationAction.endDate) }
+                ? { endDate: allocationAction.endDate }
                 : {}),
             };
       if (
@@ -247,7 +273,7 @@ export function SitesPage() {
         setAllocationAction(null);
     } catch (failure) {
       setError(
-        failure instanceof Error ? failure.message : 'Verifique os horários.',
+        failure instanceof Error ? failure.message : 'Verifique as datas.',
       );
     }
   }
@@ -286,10 +312,212 @@ export function SitesPage() {
       record.status === 'PENDING_RATE' ||
       record.status === 'PENDING_CORRECTION',
   ).length;
-  const dateTime = (value: string) =>
-    `${displayDay(lisbonDay(new Date(value)))} · ${lisbonTime(value)}`;
+  const allocationDay = (value: string) =>
+    displayDay(lisbonDay(new Date(value)));
   const findName = (items: NamedItem[], id: number) =>
     items.find((item) => item.id === id)?.name ?? `#${id}`;
+
+  const weekDays = Array.from({ length: 7 }, (_, index) =>
+    calendarShift(gridWeek, index),
+  );
+  const visibleWorkers = catalog.workers.filter(
+    (worker) =>
+      !appliedFilters.workerId || worker.id === Number(appliedFilters.workerId),
+  );
+  const findAllocationForDay = (
+    workerId: number,
+    day: string,
+    isWeekend = false,
+  ) =>
+    catalog.allocations.find((allocation) => {
+      if (allocation.workerId !== workerId) return false;
+      const start = lisbonDay(new Date(allocation.startDate));
+      const end = allocation.endDate
+        ? lisbonDay(new Date(allocation.endDate))
+        : null;
+      if (isWeekend && start < calendarShift(gridWeek, 5)) return false;
+      return start <= day && (!end || end > day);
+    }) ?? null;
+
+  const findConflictForDay = (
+    workerId: number,
+    day: string,
+    planned: Allocation | null,
+  ) =>
+    activeRecords.find((record) => {
+      if (
+        record.workerId !== workerId ||
+        lisbonDay(new Date(record.workDate)) !== day
+      )
+        return false;
+      return (
+        record.status === 'PENDING_CORRECTION' ||
+        Boolean(
+          planned &&
+            (record.siteId !== planned.siteId ||
+              record.tradeId !== planned.tradeId),
+        )
+      );
+    }) ?? null;
+
+  const weekConflicts = visibleWorkers.flatMap((worker) =>
+    weekDays.flatMap((day, dayIndex) => {
+      const planned = findAllocationForDay(worker.id, day, dayIndex >= 5);
+      if (gridSiteFilter && planned && planned.siteId !== Number(gridSiteFilter))
+        return [];
+      const conflict = findConflictForDay(worker.id, day, planned);
+      return conflict ? [{ worker, day, planned, conflict }] : [];
+    }),
+  );
+
+  const workerHabitualTrade = (worker: UserOption) => {
+    const firstAlloc = catalog.allocations.find(
+      (item) => item.workerId === worker.id,
+    );
+    const parsed = parseWorkerLabel(worker.name, firstAlloc?.trade.name);
+    const matchedTrade = catalog.trades.find(
+      (trade) =>
+        trade.name.toLowerCase() === parsed.habitualTrade.toLowerCase(),
+    );
+    return {
+      shortName: parsed.shortName,
+      habitualTradeName: matchedTrade?.name ?? parsed.habitualTrade,
+      habitualTradeId:
+        matchedTrade?.id ?? firstAlloc?.tradeId ?? catalog.trades[0]?.id ?? 0,
+    };
+  };
+
+  async function applyQuickAllocation(
+    mode: 'day' | 'workweek' | 'continuous' | 'free',
+  ) {
+    if (!selectedCell) return;
+    const { worker, day, activeAllocation, siteId, tradeId } = selectedCell;
+    if (mode === 'free') {
+      if (!activeAllocation) return;
+      const start = lisbonDay(new Date(activeAllocation.startDate));
+      if (!activeAllocation.endDate && start < day) {
+        if (
+          await save(`/allocations/${activeAllocation.id}/end`, {
+            endDate: day,
+          })
+        )
+          setSelectedCell(null);
+      } else {
+        setError(
+          'Para encerrar na grelha, escolha um dia posterior ao início da alocação aberta.',
+        );
+      }
+      return;
+    }
+    if (!siteId || !tradeId) {
+      setError('Selecione a obra e o ofício.');
+      return;
+    }
+    const fridayAfter = calendarShift(gridWeek, 5);
+    let targetEnd: string | undefined =
+      mode === 'day'
+        ? calendarShift(day, 1)
+        : mode === 'workweek'
+          ? day < fridayAfter
+            ? fridayAfter
+            : calendarShift(day, 1)
+          : undefined;
+
+    const nextAllocationStarts = catalog.allocations
+      .filter(
+        (item) =>
+          item.workerId === worker.id &&
+          item.id !== activeAllocation?.id &&
+          lisbonDay(new Date(item.startDate)) > day,
+      )
+      .map((item) => lisbonDay(new Date(item.startDate)))
+      .sort()[0];
+    if (
+      nextAllocationStarts &&
+      (!targetEnd || targetEnd > nextAllocationStarts)
+    ) {
+      targetEnd = nextAllocationStarts;
+    }
+
+    if (
+      activeAllocation &&
+      !activeAllocation.endDate &&
+      lisbonDay(new Date(activeAllocation.startDate)) < day
+    ) {
+      if (
+        await save(`/allocations/${activeAllocation.id}/transfer`, {
+          siteId: Number(siteId),
+          tradeId: Number(tradeId),
+          startDate: day,
+          ...(targetEnd ? { endDate: targetEnd } : {}),
+        })
+      ) {
+        setSelectedCell(null);
+      }
+      return;
+    }
+
+    if (
+      await save('/allocations', {
+        workerId: worker.id,
+        siteId: Number(siteId),
+        tradeId: Number(tradeId),
+        startDate: day,
+        ...(targetEnd ? { endDate: targetEnd } : {}),
+      })
+    ) {
+      setSelectedCell(null);
+    }
+  }
+
+  async function copyPreviousWeek() {
+    if (mutation.current || busy) return;
+    const prevMonday = calendarShift(gridWeek, -7);
+    const fridayEnd = calendarShift(gridWeek, 5);
+    const tasks: Array<{
+      workerId: number;
+      siteId: number;
+      tradeId: number;
+      startDate: string;
+      endDate: string;
+    }> = [];
+    for (const worker of visibleWorkers) {
+      const hasCurrentWeek = weekDays
+        .slice(0, 5)
+        .some((day) => Boolean(findAllocationForDay(worker.id, day)));
+      if (hasCurrentWeek) continue;
+      const prevAlloc =
+        findAllocationForDay(worker.id, prevMonday) ??
+        catalog.allocations.find((allocation) => {
+          const start = lisbonDay(new Date(allocation.startDate));
+          return (
+            allocation.workerId === worker.id &&
+            start >= prevMonday &&
+            start < gridWeek
+          );
+        });
+      if (prevAlloc) {
+        tasks.push({
+          workerId: worker.id,
+          siteId: prevAlloc.siteId,
+          tradeId: prevAlloc.tradeId,
+          startDate: gridWeek,
+          endDate: fridayEnd,
+        });
+      }
+    }
+    if (!tasks.length) {
+      setMessage(
+        'Todos os trabalhadores com histórico na semana anterior já possuem alocação nesta semana.',
+      );
+      return;
+    }
+    for (const payload of tasks) {
+      const ok = await save('/allocations', payload);
+      if (!ok) break;
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -322,8 +550,7 @@ export function SitesPage() {
         >
           <label>
             Obra
-            <select
-              aria-label="Obra"
+            <select aria-label="Obra"
               value={filters.siteId}
               onChange={(event) =>
                 setFilters({ ...filters, siteId: event.target.value })
@@ -339,8 +566,7 @@ export function SitesPage() {
           </label>
           <label>
             Trabalhador
-            <select
-              aria-label="Trabalhador"
+            <select aria-label="Trabalhador"
               value={filters.workerId}
               onChange={(event) =>
                 setFilters({ ...filters, workerId: event.target.value })
@@ -409,8 +635,7 @@ export function SitesPage() {
             <div className="form-grid">
               <label>
                 Trabalhador
-                <select
-                  aria-label="Trabalhador"
+                <select aria-label="Trabalhador"
                   required
                   disabled={busy}
                   value={allocationForm.workerId}
@@ -431,8 +656,7 @@ export function SitesPage() {
               </label>
               <label>
                 Obra da alocação
-                <select
-                  aria-label="Obra da alocação"
+                <select aria-label="Obra da alocação"
                   required
                   disabled={busy}
                   value={allocationForm.siteId}
@@ -453,8 +677,7 @@ export function SitesPage() {
               </label>
               <label>
                 Ofício da alocação
-                <select
-                  aria-label="Ofício da alocação"
+                <select aria-label="Ofício da alocação"
                   required
                   disabled={busy}
                   value={allocationForm.tradeId}
@@ -478,7 +701,7 @@ export function SitesPage() {
                 <input
                   required
                   disabled={busy}
-                  type="datetime-local"
+                  type="date"
                   value={allocationForm.startDate}
                   onChange={(event) =>
                     setAllocationForm({
@@ -492,7 +715,7 @@ export function SitesPage() {
                 Fim exclusivo · Lisboa (opcional)
                 <input
                   disabled={busy}
-                  type="datetime-local"
+                  type="date"
                   value={allocationForm.endDate}
                   onChange={(event) =>
                     setAllocationForm({
@@ -609,6 +832,348 @@ export function SitesPage() {
         )}
       </section>
       <div className="section-heading">
+        <h2>Distribuição</h2>
+        <span>Grelha semanal de alocação · clique num dia para alocar ou alterar</span>
+      </div>
+      <section className="card">
+        <div className="dist-toolbar">
+          <div className="dist-toolbar-left">
+            <select
+              aria-label="Filtrar obras na grelha"
+              className="dist-site-filter"
+              value={gridSiteFilter}
+              onChange={(event) => setGridSiteFilter(event.target.value)}
+            >
+              <option value="">
+                As minhas obras ({catalog.sites.length})
+              </option>
+              {catalog.sites.map((site) => (
+                <option key={site.id} value={site.id}>
+                  {site.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="dist-toolbar-right">
+            <div className="dist-week-nav">
+              <button
+                type="button"
+                aria-label="Semana anterior da grelha"
+                disabled={busy}
+                onClick={() => {
+                  setGridWeek(calendarShift(gridWeek, -7));
+                  setSelectedCell(null);
+                }}
+              >
+                ‹
+              </button>
+              <span className="dist-week-label">
+                Semana de{' '}
+                {displayDay(gridWeek, {
+                  day: '2-digit',
+                  month: 'short',
+                  year: 'numeric',
+                })}
+              </span>
+              <button
+                type="button"
+                aria-label="Semana seguinte da grelha"
+                disabled={busy}
+                onClick={() => {
+                  setGridWeek(calendarShift(gridWeek, 7));
+                  setSelectedCell(null);
+                }}
+              >
+                ›
+              </button>
+            </div>
+            <button
+              type="button"
+              className="secondary compact"
+              disabled={busy || loading}
+              onClick={() => void copyPreviousWeek()}
+            >
+              📋 Copiar semana anterior
+            </button>
+            {weekConflicts.length > 0 && (
+              <span className="dist-conflict-pill">
+                ⚠ Conflitos ({weekConflicts.length})
+              </span>
+            )}
+          </div>
+        </div>
+        {loading ? (
+          <div className="loading">A consultar grelha semanal…</div>
+        ) : !visibleWorkers.length ? (
+          <EmptyState title="Sem trabalhadores disponíveis">
+            Nenhum trabalhador encontrado para este filtro.
+          </EmptyState>
+        ) : (
+          <div className="table-wrap">
+            <table className="dist-grid-table">
+              <thead>
+                <tr>
+                  <th>Trabalhadores</th>
+                  {weekDays.map((day, index) => (
+                    <th key={day}>
+                      {weekdayLabels[index]} {Number(day.slice(8, 10))}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {visibleWorkers.map((worker) => {
+                  const info = workerHabitualTrade(worker);
+                  const hasWeekdayAllocation = weekDays
+                    .slice(0, 5)
+                    .some((weekday) =>
+                      Boolean(findAllocationForDay(worker.id, weekday, false)),
+                    );
+                  return (
+                    <tr key={worker.id}>
+                      <td className="dist-worker-cell">
+                        <strong>{info.shortName}</strong>
+                        <span>{info.habitualTradeName}</span>
+                      </td>
+                      {weekDays.map((day, dayIndex) => {
+                        const isWeekend = dayIndex >= 5;
+                        const rawPlanned = findAllocationForDay(
+                          worker.id,
+                          day,
+                          isWeekend,
+                        );
+                        const planned =
+                          gridSiteFilter &&
+                          rawPlanned &&
+                          rawPlanned.siteId !== Number(gridSiteFilter)
+                            ? null
+                            : rawPlanned;
+                        const conflict = findConflictForDay(
+                          worker.id,
+                          day,
+                          rawPlanned,
+                        );
+                        const isSelected =
+                          selectedCell?.worker.id === worker.id &&
+                          selectedCell?.day === day;
+                        const siteIndex = planned
+                          ? Math.max(
+                              0,
+                              catalog.sites.findIndex(
+                                (site) => site.id === planned.siteId,
+                              ),
+                            ) % 3
+                          : 0;
+                        const differentTrade =
+                          planned &&
+                          planned.trade.name.toLowerCase() !==
+                            info.habitualTradeName.toLowerCase();
+
+                        return (
+                          <td key={day}>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              className={[
+                                'dist-cell-btn',
+                                conflict
+                                  ? 'conflict'
+                                  : planned
+                                    ? `tone-${siteIndex}`
+                                    : isWeekend && hasWeekdayAllocation
+                                      ? 'weekend-free'
+                                      : 'free',
+                                isSelected ? 'selected' : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ')}
+                              onClick={() => {
+                                const underlyingAlloc = findAllocationForDay(
+                                  worker.id,
+                                  day,
+                                  false,
+                                );
+                                setSelectedCell({
+                                  worker,
+                                  day,
+                                  activeAllocation:
+                                    rawPlanned ?? underlyingAlloc,
+                                  siteId: String(
+                                    (rawPlanned ?? underlyingAlloc)?.siteId ??
+                                      (gridSiteFilter ||
+                                        catalog.sites[0]?.id ||
+                                        ''),
+                                  ),
+                                  tradeId: String(
+                                    (rawPlanned ?? underlyingAlloc)?.tradeId ??
+                                      info.habitualTradeId,
+                                  ),
+                                });
+                              }}
+                            >
+                              {conflict ? (
+                                <>
+                                  <span>
+                                    Planeado:{' '}
+                                    <strong>
+                                      {rawPlanned
+                                        ? rawPlanned.site.name
+                                        : 'Livre'}
+                                    </strong>
+                                  </span>
+                                  <span className="conflict-marked">
+                                    Marcou em:{' '}
+                                    {findName(catalog.sites, conflict.siteId)}
+                                    {rawPlanned &&
+                                    conflict.siteId === rawPlanned.siteId
+                                      ? ` (${findName(catalog.trades, conflict.tradeId)})`
+                                      : ''}
+                                  </span>
+                                </>
+                              ) : planned ? (
+                                <>
+                                  <strong>{planned.site.name}</strong>
+                                  {differentTrade && (
+                                    <span className="dist-trade-pill">
+                                      como {planned.trade.name}
+                                    </span>
+                                  )}
+                                </>
+                              ) : isWeekend && hasWeekdayAllocation ? null : (
+                                <span>+ Livre</span>
+                              )}
+                            </button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        {selectedCell && (
+          <div className="dist-quick-editor">
+            <div className="card-header" style={{ padding: '0 0 12px 0' }}>
+              <div>
+                <strong>
+                  {parseWorkerLabel(selectedCell.worker.name).shortName} ·{' '}
+                  {displayDay(selectedCell.day, {
+                    weekday: 'long',
+                    day: '2-digit',
+                    month: 'short',
+                    year: 'numeric',
+                  })}
+                </strong>
+                <small className="muted" style={{ display: 'block' }}>
+                  {selectedCell.activeAllocation
+                    ? `Atualmente em ${selectedCell.activeAllocation.site.name} (${selectedCell.activeAllocation.trade.name})`
+                    : 'Dia livre — escolha a obra e o ofício para alocar'}
+                </small>
+              </div>
+              <button
+                type="button"
+                className="quiet compact"
+                disabled={busy}
+                onClick={() => setSelectedCell(null)}
+              >
+                Fechar
+              </button>
+            </div>
+            <div className="form-grid" style={{ marginTop: 12 }}>
+              <label>
+                Obra
+                <select aria-label="Obra"
+                  disabled={busy}
+                  value={selectedCell.siteId}
+                  onChange={(event) =>
+                    setSelectedCell({
+                      ...selectedCell,
+                      siteId: event.target.value,
+                    })
+                  }
+                >
+                  <option value="">Selecionar…</option>
+                  {catalog.sites.map((site) => (
+                    <option key={site.id} value={site.id}>
+                      {site.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Ofício neste período
+                <select aria-label="Ofício neste período"
+                  disabled={busy}
+                  value={selectedCell.tradeId}
+                  onChange={(event) =>
+                    setSelectedCell({
+                      ...selectedCell,
+                      tradeId: event.target.value,
+                    })
+                  }
+                >
+                  <option value="">Selecionar…</option>
+                  {catalog.trades.map((trade) => (
+                    <option key={trade.id} value={trade.id}>
+                      {trade.name}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="actions" style={{ alignSelf: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="compact"
+                  disabled={busy}
+                  onClick={() => void applyQuickAllocation('day')}
+                >
+                  Apenas neste dia
+                </button>
+                <button
+                  type="button"
+                  className="secondary compact"
+                  disabled={busy}
+                  onClick={() => void applyQuickAllocation('workweek')}
+                >
+                  Até sexta-feira
+                </button>
+                <button
+                  type="button"
+                  className="secondary compact"
+                  disabled={busy}
+                  onClick={() => void applyQuickAllocation('continuous')}
+                >
+                  A partir deste dia
+                </button>
+                {selectedCell.activeAllocation &&
+                  !selectedCell.activeAllocation.endDate &&
+                  lisbonDay(
+                    new Date(selectedCell.activeAllocation.startDate),
+                  ) < selectedCell.day && (
+                    <button
+                      type="button"
+                      className="danger compact"
+                      disabled={busy}
+                      onClick={() => void applyQuickAllocation('free')}
+                    >
+                      Deixar livre a partir daqui
+                    </button>
+                  )}
+              </div>
+            </div>
+          </div>
+        )}
+        <div className="dist-footer-note">
+          <span>ⓘ</span>
+          <span>
+            Os conflitos são sinalizados e nunca bloqueiam marcações. A fatura
+            usa as marcações reais.
+          </span>
+        </div>
+      </section>
+      <div className="section-heading">
         <h2>Distribuição de trabalhadores</h2>
         <span>Períodos preservados · fim exclusivo</span>
       </div>
@@ -642,11 +1207,11 @@ export function SitesPage() {
                       {allocation.trade.name}
                     </td>
                     <td>
-                      {dateTime(allocation.startDate)}
+                      {allocationDay(allocation.startDate)}
                       <br />
                       <small className="muted">
                         {allocation.endDate
-                          ? `até ${dateTime(allocation.endDate)} (exclusivo)`
+                          ? `até ${allocationDay(allocation.endDate)} (exclusivo)`
                           : 'Sem fim definido'}
                       </small>
                     </td>
@@ -727,8 +1292,7 @@ export function SitesPage() {
                 <>
                   <label>
                     Obra de destino
-                    <select
-                      aria-label="Obra de destino"
+                    <select aria-label="Obra de destino"
                       required
                       disabled={busy}
                       value={allocationAction.siteId}
@@ -748,8 +1312,7 @@ export function SitesPage() {
                   </label>
                   <label>
                     Ofício no destino
-                    <select
-                      aria-label="Ofício no destino"
+                    <select aria-label="Ofício no destino"
                       required
                       disabled={busy}
                       value={allocationAction.tradeId}
@@ -772,7 +1335,7 @@ export function SitesPage() {
                     <input
                       required
                       disabled={busy}
-                      type="datetime-local"
+                      type="date"
                       value={allocationAction.startDate}
                       onChange={(event) =>
                         setAllocationAction({
@@ -790,7 +1353,7 @@ export function SitesPage() {
                 <input
                   required={allocationAction.mode === 'end'}
                   disabled={busy}
-                  type="datetime-local"
+                  type="date"
                   value={allocationAction.endDate}
                   onChange={(event) =>
                     setAllocationAction({
@@ -958,8 +1521,7 @@ export function SitesPage() {
             <div className="form-grid">
               <label>
                 Obra de destino da correção
-                <select
-                  aria-label="Obra de destino da correção"
+                <select aria-label="Obra de destino da correção"
                   required
                   disabled={busy}
                   value={correction.siteId}
@@ -976,8 +1538,7 @@ export function SitesPage() {
               </label>
               <label>
                 Ofício da correção
-                <select
-                  aria-label="Ofício da correção"
+                <select aria-label="Ofício da correção"
                   required
                   disabled={busy}
                   value={correction.tradeId}

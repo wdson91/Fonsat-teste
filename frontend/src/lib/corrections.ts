@@ -56,8 +56,3 @@ export function correctedEvents(
     ];
   });
 }
-export function formTimestamp(value: string): string {
-  const [day, time] = value.split('T');
-  if (!day || !time) throw new Error('Indique o dia e a hora de Lisboa.');
-  return lisbonTimestamp(day, time);
-}

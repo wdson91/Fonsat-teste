@@ -44,3 +44,12 @@ Nesta execução foi reutilizado Chromium já instalado, passando `PLAYWRIGHT_CH
 A validação foi realizada em checkout temporário do backend versionado e das alterações desta fase. Foram preservadas fora dos commits alterações paralelas em `backend/prisma/schema.prisma`, `backend/prisma/seed.ts`, `backend/src/operations/operations.dto.ts`, `backend/src/operations/operations.spec.ts`, `backend/tsconfig.json`, `frontend/src/app/management.css`, `frontend/src/lib/corrections.ts` e a grelha semanal/data-only de `frontend/src/components/sites-page.tsx`. Este último contém também pequenos ajustes desta fase, comitados pela cópia isolada para não incorporar a grelha externa. `docs/fase2-plan.md` continua não rastreado; `frontend/next-env.d.ts` pode refletir o servidor Next local em execução. Não se declara validada a combinação com essas alterações paralelas.
 
 Offline funciona depois de carregar a aplicação; não há PWA/cache para arranque sem rede. Limpar dados do navegador perde rascunhos locais. A persona por `x-user-id` é demonstração, sem autenticação real. Não há PDF/email/pagamentos. A fase 3 de revisão ampliada e a fase 5 de infraestrutura continuam pendentes. Main e branches anteriores permanecem inalteradas.
+
+
+## Commit final das alterações locais
+
+Após a entrega da fase 4.5, o pedido de commit final incluiu a grelha semanal que permanecia fora dos commits anteriores. Foram incorporados a navegação/filtro semanal, editor rápido de alocações, cópia da semana anterior, indicação de conflitos, estilos e datas de calendário no frontend/API. O seed passa a iniciar alocações à meia-noite de Lisboa; não foi executado contra o banco de demonstração. A remoção de `baseUrl` no tsconfig também foi mantida.
+
+A remoção local de `url = env("DATABASE_URL")` foi corrigida: o Prisma 6 instalado exige esse datasource. Não há alteração estrutural de tabelas nem nova migration. `docs/fase2-plan.md` permanece fora do commit, assim como eventuais alterações do ficheiro gerado `frontend/next-env.d.ts`.
+
+Verificação desta combinação: Prisma validate, build do backend, build de produção do frontend com TypeScript, 45 testes backend (6 suites, bancos descartáveis) e 8 testes frontend aprovados. Os 12 cenários de navegador descritos acima correspondem à integração anterior; não foram repetidos para a nova grelha semanal neste commit final.
