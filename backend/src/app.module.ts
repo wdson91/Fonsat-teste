@@ -11,6 +11,8 @@ import { RatesController } from './rates/rates.controller';
 import { RatesService } from './rates/rates.service';
 import { AttendanceController } from './attendance/attendance.controller';
 import { AttendanceService } from './attendance/attendance.service';
+import { CorrectionsController } from './corrections/corrections.controller';
+import { CorrectionsService } from './corrections/corrections.service';
 
 @Module({
   imports: [PrismaModule],
@@ -19,6 +21,7 @@ import { AttendanceService } from './attendance/attendance.service';
     OperationsController,
     RatesController,
     AttendanceController,
+    CorrectionsController,
   ],
   providers: [
     UsersService,
@@ -26,6 +29,7 @@ import { AttendanceService } from './attendance/attendance.service';
     OperationsService,
     RatesService,
     AttendanceService,
+    CorrectionsService,
     { provide: APP_GUARD, useClass: AccessGuard },
   ],
 })
