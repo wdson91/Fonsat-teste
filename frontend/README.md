@@ -17,3 +17,4 @@ Testes de datas/rascunhos/erros: `npm test`.
 - [Grelha e rascunhos](../docs/relatorio-fase-4.2.md)
 - [Gestão de obras](../docs/relatorio-fase-4.3.md)
 - [Faturação e documentos](../docs/relatorio-fase-4.4.md)
+- [Integração, smoke real e capturas](../docs/relatorio-fase-4.5.md)

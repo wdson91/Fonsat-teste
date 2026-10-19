@@ -45,6 +45,9 @@ export function WorkerPage() {
   const [storageIssue, setStorageIssue] = useState('');
   const [networkError, setNetworkError] = useState('');
   const [message, setMessage] = useState('');
+  const [messageTone, setMessageTone] = useState<'success' | 'warning'>(
+    'success',
+  );
   const [records, setRecords] = useState<AttendanceRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -106,11 +109,9 @@ export function WorkerPage() {
       apiRequest<Allocation[]>('/allocations', persona.id, {
         signal: requestSignal,
       }),
-      apiRequest<AttendanceRecord[]>(
-        `/attendance/records?from=${week}&to=${calendarShift(week, 7)}`,
-        persona.id,
-        { signal: requestSignal },
-      ),
+      apiRequest<AttendanceRecord[]>('/attendance/records', persona.id, {
+        signal: requestSignal,
+      }),
     ])
       .then(([sites, trades, allocations, receivedRecords]) => {
         if (requestSignal.aborted) return;
@@ -143,7 +144,7 @@ export function WorkerPage() {
     return () => controller.abort();
     // A referência atual impede a consulta de sobrescrever edições feitas enquanto carregava.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [hydrated, key, persona.id, signal, week, refresh]);
+  }, [hydrated, key, persona.id, signal, refresh]);
 
   function changeRow(id: string, changes: Partial<DraftTurn>) {
     commitStore({
@@ -233,6 +234,7 @@ export function WorkerPage() {
           failed++;
         }
       }
+      setMessageTone(failed ? 'warning' : 'success');
       setMessage(
         `${confirmed} turno(s) confirmado(s)${failed ? `; ${failed} aguardam nova tentativa` : ''}. Os incompletos continuam em rascunho.`,
       );
@@ -244,9 +246,17 @@ export function WorkerPage() {
   }
 
   function backupDrafts() {
-    const content = corrupted.current
-      ? (localStorage.getItem(key) ?? '')
-      : JSON.stringify(storeRef.current, null, 2);
+    let content: string;
+    try {
+      content = corrupted.current
+        ? (localStorage.getItem(key) ?? '')
+        : JSON.stringify(storeRef.current, null, 2);
+    } catch {
+      setStorageIssue(
+        'O navegador bloqueou a leitura do armazenamento. Não foi possível descarregar a cópia; os dados não foram apagados.',
+      );
+      return;
+    }
     const url = URL.createObjectURL(
       new Blob([content], { type: 'application/json' }),
     );
@@ -266,7 +276,12 @@ export function WorkerPage() {
       row.status !== 'sent' &&
       (row.payload || !turnValidation(row)),
   ).length;
-  const visibleRecords = currentRecords(records);
+  const inWeek = (record: AttendanceRecord) => {
+    const day = lisbonDay(new Date(record.workDate));
+    return day >= week && day < calendarShift(week, 7);
+  };
+  const visibleRecords = currentRecords(records).filter(inWeek);
+  const weekRecords = records.filter(inWeek);
   return (
     <>
       <PageHeader
@@ -322,7 +337,7 @@ export function WorkerPage() {
           </button>
         </Notice>
       )}
-      {message && <Notice tone="success">{message}</Notice>}
+      {message && <Notice tone={messageTone}>{message}</Notice>}
       <section className="card">
         <div className="card-header">
           <div>
@@ -354,6 +369,19 @@ export function WorkerPage() {
             >
               Esta semana
             </button>
+            <label className="week-picker">
+              Semana de
+              <input
+                aria-label="Semana a consultar"
+                type="date"
+                value={week}
+                disabled={busy}
+                onChange={(event) => {
+                  if (event.target.value)
+                    setWeek(weekStart(event.target.value));
+                }}
+              />
+            </label>
             <button
               className="secondary compact"
               aria-label="Semana seguinte"
@@ -411,7 +439,11 @@ export function WorkerPage() {
                 <p className="day-empty">Sem rascunhos locais para este dia.</p>
               )}
               {rows.map((row, index) => {
-                const frozen = !!row.payload || busy || corrupted.current;
+                const frozen =
+                  !!row.payload ||
+                  row.status === 'sent' ||
+                  busy ||
+                  corrupted.current;
                 const validation = turnValidation(row);
                 return (
                   <div className="turn-block" key={row.id}>
@@ -595,7 +627,7 @@ export function WorkerPage() {
       <section className="card">
         <div className="card-header">
           <div>
-            <h2>Registos confirmados pela API</h2>
+            <h2>Registos confirmados</h2>
             <small className="muted">
               Versões atuais desta semana · preços não são mostrados
             </small>
@@ -657,11 +689,13 @@ export function WorkerPage() {
             </table>
           </div>
         )}
-        {records.length > 0 && (
+        {weekRecords.length > 0 && (
           <details>
-            <summary>Histórico e horários ({records.length} versões)</summary>
+            <summary>
+              Histórico e horários ({weekRecords.length} versões)
+            </summary>
             <div className="card-content record-history">
-              {records.map((record) => (
+              {weekRecords.map((record) => (
                 <div className="history-item" key={record.id}>
                   <strong>
                     #{record.id} ·{' '}

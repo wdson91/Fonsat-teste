@@ -85,6 +85,25 @@ export function SitesPage() {
   const [rateReason, setRateReason] = useState('');
 
   useEffect(() => {
+    if (correction)
+      document
+        .getElementById('correction-editor')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [correction?.record.id]);
+  useEffect(() => {
+    if (rateRecord)
+      document
+        .getElementById('rate-editor')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [rateRecord?.id]);
+  useEffect(() => {
+    if (allocationAction)
+      document
+        .getElementById('allocation-editor')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [allocationAction?.allocation.id, allocationAction?.mode]);
+
+  useEffect(() => {
     const controller = new AbortController();
     const requestSignal = signal
       ? AbortSignal.any([signal, controller.signal])
@@ -304,6 +323,7 @@ export function SitesPage() {
           <label>
             Obra
             <select
+              aria-label="Obra"
               value={filters.siteId}
               onChange={(event) =>
                 setFilters({ ...filters, siteId: event.target.value })
@@ -320,6 +340,7 @@ export function SitesPage() {
           <label>
             Trabalhador
             <select
+              aria-label="Trabalhador"
               value={filters.workerId}
               onChange={(event) =>
                 setFilters({ ...filters, workerId: event.target.value })
@@ -389,6 +410,7 @@ export function SitesPage() {
               <label>
                 Trabalhador
                 <select
+                  aria-label="Trabalhador"
                   required
                   disabled={busy}
                   value={allocationForm.workerId}
@@ -410,6 +432,7 @@ export function SitesPage() {
               <label>
                 Obra da alocação
                 <select
+                  aria-label="Obra da alocação"
                   required
                   disabled={busy}
                   value={allocationForm.siteId}
@@ -431,6 +454,7 @@ export function SitesPage() {
               <label>
                 Ofício da alocação
                 <select
+                  aria-label="Ofício da alocação"
                   required
                   disabled={busy}
                   value={allocationForm.tradeId}
@@ -674,7 +698,7 @@ export function SitesPage() {
         )}
       </section>
       {allocationAction && (
-        <section className="card">
+        <section id="allocation-editor" className="card">
           <div className="card-header">
             <div>
               <h2>
@@ -704,6 +728,7 @@ export function SitesPage() {
                   <label>
                     Obra de destino
                     <select
+                      aria-label="Obra de destino"
                       required
                       disabled={busy}
                       value={allocationAction.siteId}
@@ -724,6 +749,7 @@ export function SitesPage() {
                   <label>
                     Ofício no destino
                     <select
+                      aria-label="Ofício no destino"
                       required
                       disabled={busy}
                       value={allocationAction.tradeId}
@@ -909,7 +935,7 @@ export function SitesPage() {
         )}
       </section>
       {correction && (
-        <section className="card">
+        <section id="correction-editor" className="card">
           <div className="card-header">
             <h2>Corrigir registo #{correction.record.id}</h2>
             <button
@@ -933,6 +959,7 @@ export function SitesPage() {
               <label>
                 Obra de destino da correção
                 <select
+                  aria-label="Obra de destino da correção"
                   required
                   disabled={busy}
                   value={correction.siteId}
@@ -950,6 +977,7 @@ export function SitesPage() {
               <label>
                 Ofício da correção
                 <select
+                  aria-label="Ofício da correção"
                   required
                   disabled={busy}
                   value={correction.tradeId}
@@ -1068,7 +1096,7 @@ export function SitesPage() {
         </section>
       )}
       {rateRecord && (
-        <section className="card">
+        <section id="rate-editor" className="card">
           <div className="card-header">
             <h2>Resolver preço do registo #{rateRecord.id}</h2>
             <button

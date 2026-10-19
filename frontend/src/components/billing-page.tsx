@@ -321,6 +321,7 @@ export function BillingPage() {
                 <label>
                   Cliente da fatura
                   <select
+                    aria-label="Cliente da fatura"
                     required
                     disabled={!!busy || loading}
                     value={period.clientId}
@@ -339,6 +340,7 @@ export function BillingPage() {
                 <label>
                   Mês da competência
                   <select
+                    aria-label="Mês da competência"
                     disabled={!!busy}
                     value={period.month}
                     onChange={(event) =>
@@ -576,6 +578,7 @@ export function BillingPage() {
                 <label>
                   Cliente da tarifa
                   <select
+                    aria-label="Cliente da tarifa"
                     required
                     disabled={!!busy || loading}
                     value={rateForm.clientId}
@@ -594,6 +597,7 @@ export function BillingPage() {
                 <label>
                   Ofício da tarifa
                   <select
+                    aria-label="Ofício da tarifa"
                     required
                     disabled={!!busy || loading}
                     value={rateForm.tradeId}
@@ -666,6 +670,7 @@ export function BillingPage() {
               <label>
                 Cliente consultado
                 <select
+                  aria-label="Cliente consultado"
                   disabled={!!busy}
                   value={rateClient}
                   onChange={(event) => setRateClient(event.target.value)}
