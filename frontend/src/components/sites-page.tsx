@@ -38,7 +38,6 @@ interface Catalog {
   foremen: UserOption[];
   clients: NamedItem[];
   trades: NamedItem[];
-  allocations: Allocation[];
   gridAllocations: Allocation[];
   records: AttendanceRecord[];
 }
@@ -48,7 +47,6 @@ const emptyCatalog: Catalog = {
   foremen: [],
   clients: [],
   trades: [],
-  allocations: [],
   gridAllocations: [],
   records: [],
 };
@@ -155,9 +153,6 @@ export function SitesPage() {
         signal: requestSignal,
       }),
       apiRequest<NamedItem[]>('/trades', persona.id, { signal: requestSignal }),
-      apiRequest<Allocation[]>(`/allocations?${query}`, persona.id, {
-        signal: requestSignal,
-      }),
       apiRequest<Allocation[]>('/allocations', persona.id, {
         signal: requestSignal,
       }),
@@ -174,7 +169,6 @@ export function SitesPage() {
           foremen,
           clients,
           trades,
-          allocations,
           gridAllocations,
           records,
         ]) => {
@@ -185,7 +179,6 @@ export function SitesPage() {
               foremen,
               clients,
               trades,
-              allocations,
               gridAllocations,
               records,
             });
@@ -999,95 +992,6 @@ export function SitesPage() {
             {gridError && <p role="alert">{gridError}</p>}
             {error && <p role="alert">{error}</p>}
           </form>
-        )}
-      </section>
-      <div className="section-heading">
-        <h2>Distribuição de trabalhadores</h2>
-        <span>Períodos preservados · fim exclusivo</span>
-      </div>
-      <section className="card">
-        {loading ? (
-          <div className="loading">A consultar alocações…</div>
-        ) : !catalog.allocations.length ? (
-          <EmptyState title="Sem alocações neste filtro">
-            Crie uma nova distribuição ou altere o período de consulta.
-          </EmptyState>
-        ) : (
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>Trabalhador</th>
-                  <th>Obra / ofício</th>
-                  <th>Período · Lisboa</th>
-                  <th>Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {catalog.allocations.map((allocation) => (
-                  <tr key={allocation.id}>
-                    <td>
-                      <strong>{allocation.worker.name}</strong>
-                      <small className="muted">Alocação #{allocation.id}</small>
-                    </td>
-                    <td>
-                      <strong>{allocation.site.name}</strong>
-                      {allocation.trade.name}
-                    </td>
-                    <td>
-                      {allocationDay(allocation.startDate)}
-                      <br />
-                      <small className="muted">
-                        {allocation.endDate
-                          ? `até ${allocationDay(allocation.endDate)} (exclusivo)`
-                          : 'Sem fim definido'}
-                      </small>
-                    </td>
-                    <td>
-                      {allocation.endDate ? (
-                        <span className="badge gray">Histórico fechado</span>
-                      ) : (
-                        <div className="actions">
-                          <button
-                            className="secondary compact"
-                            disabled={busy}
-                            onClick={() =>
-                              setAllocationAction({
-                                allocation,
-                                mode: 'transfer',
-                                siteId: String(allocation.siteId),
-                                tradeId: String(allocation.tradeId),
-                                startDate: '',
-                                endDate: '',
-                              })
-                            }
-                          >
-                            Transferir
-                          </button>
-                          <button
-                            className="quiet compact"
-                            disabled={busy}
-                            onClick={() =>
-                              setAllocationAction({
-                                allocation,
-                                mode: 'end',
-                                siteId: '',
-                                tradeId: '',
-                                startDate: '',
-                                endDate: '',
-                              })
-                            }
-                          >
-                            Encerrar
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
         )}
       </section>
       {allocationAction && (

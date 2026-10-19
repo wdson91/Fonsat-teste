@@ -467,11 +467,9 @@ try {
   await page
     .getByRole('button', { name: '+ Nova alocação', exact: true })
     .click();
-  const createForm = page
-    .locator('form')
-    .filter({
-      has: page.getByRole('button', { name: 'Guardar alocação', exact: true }),
-    });
+  const createForm = page.locator('form').filter({
+    has: page.getByRole('button', { name: 'Guardar alocação', exact: true }),
+  });
   await createForm
     .getByLabel('Trabalhador', { exact: true })
     .selectOption(String(fixture.planningWorkerId));
@@ -481,16 +479,33 @@ try {
   await createForm
     .getByLabel('Ofício da alocação', { exact: true })
     .selectOption(String(fixture.tradeId));
+  const planningStart = await page.getByTestId('distribution-week').innerText();
+  const planningDay = (offset) => {
+    const day = new Date(planningStart + 'T12:00:00Z');
+    day.setUTCDate(day.getUTCDate() + offset);
+    return day.toISOString().slice(0, 10);
+  };
+  const planningWorker = (
+    await api(fixture.adminId, '/users?role=WORKER')
+  ).find((worker) => worker.id === fixture.planningWorkerId);
   await fillAllocationDate(
     createForm.getByLabel('Início · Lisboa', { exact: true }),
-    '2090-01-01',
+    planningStart,
   );
   await createForm
     .getByRole('button', { name: 'Guardar alocação', exact: true })
     .click();
   await createForm.waitFor({ state: 'detached' });
   await filterWorker(fixture.planningWorkerId);
-  await page.getByRole('button', { name: 'Transferir', exact: true }).click();
+  await page
+    .getByRole('region', { name: 'Distribuição semanal', exact: true })
+    .getByRole('button', {
+      name: new RegExp(`${planningWorker.name} · ${planningStart} ·`),
+    })
+    .click();
+  await page
+    .getByRole('button', { name: 'Transferir distribuição', exact: true })
+    .click();
   const allocationEditor = page.locator('#allocation-editor');
   await allocationEditor
     .getByLabel('Obra de destino', { exact: true })
@@ -500,7 +515,7 @@ try {
     .selectOption(String(fixture.otherTradeId));
   await fillAllocationDate(
     allocationEditor.getByLabel('Início no destino · Lisboa', { exact: true }),
-    '2090-01-02',
+    planningDay(1),
   );
   await allocationEditor
     .getByRole('button', {
@@ -509,10 +524,18 @@ try {
     })
     .click();
   await allocationEditor.waitFor({ state: 'detached' });
-  await page.getByRole('button', { name: 'Encerrar', exact: true }).click();
+  await page
+    .getByRole('region', { name: 'Distribuição semanal', exact: true })
+    .getByRole('button', {
+      name: new RegExp(`${planningWorker.name} · ${planningDay(1)} ·`),
+    })
+    .click();
+  await page
+    .getByRole('button', { name: 'Encerrar período', exact: true })
+    .click();
   await fillAllocationDate(
     allocationEditor.getByLabel('Fim exclusivo · Lisboa', { exact: true }),
-    '2090-01-03',
+    planningDay(2),
   );
   await allocationEditor
     .getByRole('button', {
