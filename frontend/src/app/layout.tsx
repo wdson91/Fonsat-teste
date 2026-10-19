@@ -3,6 +3,7 @@ import { AppShell } from '../components/app-shell';
 import { SessionProvider } from '../components/session';
 import './globals.css';
 import './worker.css';
+import './management.css';
 export const metadata: Metadata = {
   title: 'Fonsat — Operações de obra',
   description: 'Assiduidade, equipas e faturação com histórico.',
