@@ -1,5 +1,5 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { PrismaClient, UserRole } from '@prisma/client';
 import { PrismaService } from '../src/prisma/prisma.service';
@@ -35,9 +35,19 @@ export async function testDatabase() {
         'ON_ERROR_STOP=1',
       ],
       {
-        input: readFileSync(
-          resolve('prisma/migrations/20261018132440_init/migration.sql'),
-        ),
+        input: readdirSync(resolve('prisma/migrations'), {
+          withFileTypes: true,
+        })
+          .filter((entry) => entry.isDirectory())
+          .map((entry) => entry.name)
+          .sort()
+          .map((name) =>
+            readFileSync(
+              resolve('prisma/migrations', name, 'migration.sql'),
+              'utf8',
+            ),
+          )
+          .join('\n'),
         stdio: ['pipe', 'pipe', 'pipe'],
       },
     );
