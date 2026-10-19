@@ -23,6 +23,7 @@ Este documento regista as decisões de arquitetura e de domínio tomadas perante
   - Tarifas (`ClientRate`) são negociadas por `(clientId, tradeId)` com intervalo `[validFrom, validTo]`.
   - Ao registar um novo preço com `validFrom`, o sistema encerra automaticamente a tarifa anterior aberta (`validTo = novo.validFrom - 1ms`).
   - Nenhuma nova vigência pode sobrepor-se a outra nem alterar retroativamente o preço de horas já trabalhadas e precificadas (`ACTIVE`).
+  - Depois da primeira tarifa, novos inícios só a partir de amanhã em Europe/Lisbon e depois da última vigência programada; a primeira pode ser histórica para resolver horas sem preço.
 - **Trabalhador Nunca Bloqueado por Falta de Preço Cadastrado (`PENDING_RATE`)**:
   - Se não existir tarifa vigente na `workDate` para aquele `(clientId, tradeId)`, o `WorkRecord` é salvo com `totalMinutes` obrigatório e `status = PENDING_RATE` (`totalAmount = null`), ficando pendente para resolução do Encarregado/Administrativo sem entrar na cobrança até ser resolvido.
 
