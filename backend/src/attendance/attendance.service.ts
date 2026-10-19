@@ -52,8 +52,9 @@ export class AttendanceService {
         site.client.companyId !== companyId ||
         site.foreman.companyId !== companyId ||
         site.foreman.role !== 'FOREMAN'
-      )
+      ) {
         throw new NotFoundException('Obra ou ofício não encontrado');
+      }
     }
   }
 
@@ -93,8 +94,9 @@ export class AttendanceService {
     this.scope.requireRole(persona, ['ADMIN', 'FOREMAN', 'WORKER']);
     const from = filters.from ? dateInput(filters.from) : undefined,
       to = filters.to ? dateInput(filters.to) : undefined;
-    if (from && to && from >= to)
+    if (from && to && from >= to) {
       throw new BadRequestException('Período inválido');
+    }
     return this.prisma.withTenant(persona.companyId, async (transaction) => {
       if (
         filters.workerId &&
@@ -106,18 +108,21 @@ export class AttendanceService {
               role: 'WORKER',
             },
           })))
-      )
+      ) {
         throw new NotFoundException('Trabalhador não encontrado');
+      }
       if (filters.siteId) {
         if (persona.role === 'WORKER') {
           if (
             !(await transaction.site.findFirst({
               where: { id: filters.siteId, companyId: persona.companyId },
             }))
-          )
+          ) {
             throw new NotFoundException('Obra não encontrada');
-        } else
+          }
+        } else {
           await this.scope.requireSite(transaction, persona, filters.siteId);
+        }
       }
       const records = await transaction.workRecord.findMany({
         where: {
@@ -149,10 +154,11 @@ export class AttendanceService {
             if (
               unique.has(event.id) &&
               eventKey(unique.get(event.id)!) !== eventKey(event)
-            )
+            ) {
               throw new ConflictException(
                 'ID de evento com conteúdo diferente',
               );
+            }
             unique.set(event.id, event);
           }
           const incoming = [...unique.values()];
@@ -169,23 +175,26 @@ export class AttendanceService {
           });
           const known = new Map<string, AttendanceEventDto>();
           for (const dedup of previous) {
-            if (dedup.workRecord.workerId !== persona.id)
+            if (dedup.workRecord.workerId !== persona.id) {
               throw new ConflictException(
                 'Identificador de evento já utilizado',
               );
+            }
             for (const event of recordEvents(dedup.workRecord).filter(
               (event) => event.shiftId === dedup.shiftId,
-            ))
+            )) {
               known.set(event.id, event);
+            }
           }
           const ignoredEventIds: string[] = [];
           const combined = new Map(known);
           for (const event of incoming) {
             if (known.has(event.id)) {
-              if (eventKey(known.get(event.id)!) !== eventKey(event))
+              if (eventKey(known.get(event.id)!) !== eventKey(event)) {
                 throw new ConflictException(
                   'ID de evento com conteúdo diferente',
                 );
+              }
               ignoredEventIds.push(event.id);
             }
             combined.set(event.id, event);
@@ -194,7 +203,9 @@ export class AttendanceService {
           const newShifts = shifts.filter(
             (shift) => !known.has(shift.entry.id) || !known.has(shift.exit.id),
           );
-          if (!newShifts.length) return { records: [], ignoredEventIds };
+          if (!newShifts.length) {
+            return { records: [], ignoredEventIds };
+          }
           await noTimeOverlap(
             transaction,
             persona.companyId,
@@ -290,11 +301,12 @@ export class AttendanceService {
               group.pending || pendingRate
                 ? null
                 : (current?.hourlyRateSnapshot ?? rate!.hourlyRate);
-            if (current)
+            if (current) {
               await transaction.workRecord.update({
                 where: { id: current.id },
                 data: { status: 'SUPERSEDED' },
               });
+            }
             const record = await transaction.workRecord.create({
               data: {
                 companyId: persona.companyId,
@@ -323,8 +335,8 @@ export class AttendanceService {
                 createdById: persona.id,
               },
             });
-            for (const event of group.events)
-              if (!known.has(event.id))
+            for (const event of group.events) {
+              if (!known.has(event.id)) {
                 await transaction.attendanceEventDedup.create({
                   data: {
                     id: event.id,
@@ -333,6 +345,8 @@ export class AttendanceService {
                     workRecordId: record.id,
                   },
                 });
+              }
+            }
             results.push(this.present(record));
           }
           return { records: results, ignoredEventIds };
@@ -342,8 +356,9 @@ export class AttendanceService {
       if (
         error instanceof Prisma.PrismaClientKnownRequestError &&
         error.code === 'P2002'
-      )
+      ) {
         throw new ConflictException('Identificador de evento já utilizado');
+      }
       throw error;
     }
   }

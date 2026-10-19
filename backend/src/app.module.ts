@@ -13,6 +13,8 @@ import { AttendanceController } from './attendance/attendance.controller';
 import { AttendanceService } from './attendance/attendance.service';
 import { CorrectionsController } from './corrections/corrections.controller';
 import { CorrectionsService } from './corrections/corrections.service';
+import { InvoicesController } from './invoices/invoices.controller';
+import { InvoicesService } from './invoices/invoices.service';
 
 @Module({
   imports: [PrismaModule],
@@ -22,6 +24,7 @@ import { CorrectionsService } from './corrections/corrections.service';
     RatesController,
     AttendanceController,
     CorrectionsController,
+    InvoicesController,
   ],
   providers: [
     UsersService,
@@ -30,6 +33,7 @@ import { CorrectionsService } from './corrections/corrections.service';
     RatesService,
     AttendanceService,
     CorrectionsService,
+    InvoicesService,
     { provide: APP_GUARD, useClass: AccessGuard },
   ],
 })

@@ -42,9 +42,10 @@ export function workAmount(
     .div(60)
     .mul(hourlyRate)
     .toDecimalPlaces(2, Prisma.Decimal.ROUND_HALF_UP);
-  if (amount.abs().gt('99999999.99'))
+  if (amount.abs().gt('99999999.99')) {
     throw new ConflictException(
       'Montante excede a capacidade decimal do documento',
     );
+  }
   return amount;
 }

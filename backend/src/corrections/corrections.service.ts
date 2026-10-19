@@ -56,8 +56,9 @@ export class CorrectionsService {
       }))!;
       await lockWorker(transaction, persona.companyId, original.workerId);
       await transaction.$queryRaw`SELECT "id" FROM "WorkRecord" WHERE "id"=${recordId} FOR UPDATE`;
-      if (original.status === 'SUPERSEDED')
+      if (original.status === 'SUPERSEDED') {
         throw new ConflictException('Registro já substituído');
+      }
       if (
         !(await transaction.user.findFirst({
           where: {
@@ -66,10 +67,12 @@ export class CorrectionsService {
             role: 'WORKER',
           },
         }))
-      )
+      ) {
         throw new NotFoundException('Trabalhador não encontrado');
-      if (resolveRate && original.status !== 'PENDING_RATE')
+      }
+      if (resolveRate && original.status !== 'PENDING_RATE') {
         throw new ConflictException('Apenas PENDING_RATE pode resolver preço');
+      }
       const rootId = original.correctsInvoicedRecordId ?? original.id;
       const invoice = await transaction.invoice.findFirst({
         where: {
@@ -95,8 +98,9 @@ export class CorrectionsService {
             orderBy: { id: 'desc' },
           })
         : null;
-      if (original.correctsInvoicedRecordId && latest?.id !== original.id)
+      if (original.correctsInvoicedRecordId && latest?.id !== original.id) {
         throw new ConflictException('Use a versão mais recente');
+      }
       const source = latest ?? original;
       const correction = payload as CorrectionDto;
       const siteId = resolveRate ? original.siteId : correction.siteId,
@@ -104,10 +108,11 @@ export class CorrectionsService {
       const rawEvents = resolveRate
         ? recordEvents(original)
         : (correction.events ?? recordEvents(source));
-      if (!rawEvents.length)
+      if (!rawEvents.length) {
         throw new BadRequestException(
           'Informe os turnos completos da correção',
         );
+      }
       await this.attendance.references(
         transaction,
         persona.companyId,
@@ -128,10 +133,11 @@ export class CorrectionsService {
       const events = rawEvents.map((event) => ({ ...event, siteId, tradeId }));
       await this.attendance.references(transaction, persona.companyId, events);
       const shifts = shiftsFrom(events);
-      if (new Set(shifts.map((shift) => shift.day)).size !== 1)
+      if (new Set(shifts.map((shift) => shift.day)).size !== 1) {
         throw new BadRequestException(
           'Registro corrigido deve pertencer a um dia',
         );
+      }
       const workDate = dateInput(shifts[0].day);
       const family = invoice
         ? await transaction.workRecord.findMany({
@@ -153,10 +159,11 @@ export class CorrectionsService {
         where: { id: siteId, companyId: persona.companyId },
         include: { client: true },
       }))!;
-      if (invoice && invoice.clientId !== site.clientId)
+      if (invoice && invoice.clientId !== site.clientId) {
         throw new ConflictException(
           'Após emissão, mudança de cliente exige retificação comercial separada',
         );
+      }
       let rate = await this.rates.findForWork(
         transaction,
         persona.companyId,
@@ -182,10 +189,11 @@ export class CorrectionsService {
             })
           : rate;
       }
-      if ((resolveRate || invoice) && (!hourlyRateSnapshot || !rate))
+      if ((resolveRate || invoice) && (!hourlyRateSnapshot || !rate)) {
         throw new ConflictException(
           'Ainda não existe tarifa histórica aplicável',
         );
+      }
       if (
         invoice &&
         (await transaction.invoice.findFirst({
@@ -202,21 +210,23 @@ export class CorrectionsService {
             },
           },
         }))
-      )
+      ) {
         throw new ConflictException(
           'Emita o ajuste pendente antes de corrigir novamente',
         );
+      }
       const totalMinutes = Math.round(
         shifts.reduce((sum, shift) => sum + shift.milliseconds, 0) / 60000,
       );
       const totalAmount = hourlyRateSnapshot
         ? workAmount(totalMinutes, hourlyRateSnapshot)
         : null;
-      if (!invoice)
+      if (!invoice) {
         await transaction.workRecord.update({
           where: { id: original.id },
           data: { status: 'SUPERSEDED' },
         });
+      }
       const record = await transaction.workRecord.create({
         data: {
           companyId: persona.companyId,

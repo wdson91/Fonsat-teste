@@ -77,14 +77,16 @@ export class RatesService {
   create(persona: PersonaContext, payload: CreateRateDto) {
     this.scope.requireRole(persona, ['ADMIN']);
     const hourlyRate = new Prisma.Decimal(payload.hourlyRate);
-    if (!hourlyRate.isPositive() || hourlyRate.isZero())
+    if (!hourlyRate.isPositive() || hourlyRate.isZero()) {
       throw new BadRequestException('Preço deve ser positivo');
+    }
     const validFrom = dateInput(payload.validFrom);
     const validTo = payload.validTo
       ? new Date(nextDay(payload.validTo).getTime() - 1)
       : null;
-    if (validTo && validTo < validFrom)
+    if (validTo && validTo < validFrom) {
       throw new BadRequestException('Vigência inválida');
+    }
     return this.prisma.withTenant(persona.companyId, async (transaction) => {
       await lockCompany(transaction, persona.companyId);
       await this.references(transaction, persona.companyId, payload);
@@ -98,22 +100,25 @@ export class RatesService {
         orderBy: { validFrom: 'desc' },
       });
       if (latest) {
-        if (validFrom < nextDay(lisbonDay(new Date())))
+        if (validFrom < nextDay(lisbonDay(new Date()))) {
           throw new ConflictException(
             'Nova tarifa apenas a partir de amanhã em Lisboa',
           );
+        }
         if (
           validFrom <= latest.validFrom ||
           (latest.validTo && validFrom <= latest.validTo)
-        )
+        ) {
           throw new ConflictException(
             'Vigência sobreposta ou anterior à última tarifa',
           );
-        if (!latest.validTo)
+        }
+        if (!latest.validTo) {
           await transaction.clientRate.update({
             where: { id: latest.id },
             data: { validTo: new Date(validFrom.getTime() - 1) },
           });
+        }
       }
       return this.present(
         await transaction.clientRate.create({

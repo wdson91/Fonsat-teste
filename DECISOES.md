@@ -10,6 +10,7 @@ Este documento regista as decisões de arquitetura e de domínio tomadas perante
   - A grelha no telemóvel do trabalhador mantém marcações incompletas no dispositivo (`localStorage`) e **envia somente turnos completos (com entrada `in` e saída `out`)**, também validados pelo backend.
   - No `AttendanceService`, antes de salvar no banco, os pares `in`/`out` são agrupados por `(workDate, siteId, tradeId)`, os minutos de todos os turnos são somados e **o total de minutos (`totalMinutes: Int`, obrigatório) é arredondado (`Math.round`) antes de ser persistido**.
   - Os eventos originais (`eventsJson`) permanecem gravados no `WorkRecord` e a tabela `AttendanceEventDedup` garante idempotência caso o telemóvel reenvie o mesmo pacote.
+  - Divergência de obra/ofício ou alocação vira `PENDING_CORRECTION`, sem dinheiro; ID igual/conteúdo diferente retorna 409, replay idêntico é ignorado.
 - **Precisão Monetária (`DECIMAL(10, 2)`) e Snapshot Histórico**:
   - Todos os preços horários e montantes utilizam `DECIMAL(10, 2)` no PostgreSQL.
   - A tarifa aplicável é determinada pela **data/hora em que o trabalho ocorreu (`occurredAt` / `workDate`)**, congelando `clientRateId`, `hourlyRateSnapshot` e `totalAmount = round((totalMinutes / 60) * hourlyRateSnapshot, 2)`.
@@ -39,14 +40,15 @@ Este documento regista as decisões de arquitetura e de domínio tomadas perante
 - **Correções ANTES da Emissão da Fatura**:
   - Em uma mesma transação (`prisma.$transaction`), marca a versão anterior como `SUPERSEDED` e cria uma nova versão de `WorkRecord` ligada por `replacesRecordId`, registando `correctionReason` e `createdById`.
 - **Correções DEPOIS da Emissão da Fatura (`ISSUED`)**:
-  - Preserva o registo faturado e a fatura original intactos; cria um novo `WorkRecord` ligado por `correctsInvoicedRecordId` e gera uma **Nota de Crédito (`CREDIT_NOTE`)** ou **Nota de Débito (`DEBIT_NOTE`)** vinculada à fatura original (`parentInvoiceId`) pela diferença.
+  - Preserva original; nova versão aponta `correctsInvoicedRecordId`. Nota CREDIT_NOTE/DEBIT_NOTE DRAFT (`parentInvoiceId`) cobra só diferença contra original + ajustes ISSUED; zero não gera documento. DRAFT pendente bloqueia nova correção; trocar cliente após emissão exige retificação comercial separada.
+  - Fatura regular inclui todo trabalho ACTIVE ainda não emitido até o fim da competência, mesmo antigo; pendências não bloqueiam resolvidos. Prévia sem escrita/token de conteúdo; emissão atômica soma montantes já arredondados e exclui registros de correção.
 
 ---
 
 ## 4. Multi-Tenancy com Row-Level Security (RLS) e Enquadramento Legal (AT / SAF-T / IVA)
 
 - **Dupla Camada de Isolamento Multi-Tenant (Aplicação + PostgreSQL RLS)**:
-  - Sem ecrã de login (fora de âmbito), um *Persona Switcher* envia `x-user-id`, validado por Guards no NestJS para os 4 papéis (`WORKER`, `FOREMAN`, `ADMIN`, `CLIENT`).
+  - Sem login real, `x-user-id` simula persona; um único AccessGuard resolve os 4 papéis. Serviços aplicam escopo; bootstrap privilegiado é limite da demonstração.
   - No PostgreSQL, todas as tabelas têm **`ENABLE ROW LEVEL SECURITY` e `FORCE ROW LEVEL SECURITY`** com políticas (`CREATE POLICY`) baseadas na function `current_tenant_id()` (`current_setting('app.current_company_id')`) e na role `app_tenant_user` (`NOBYPASSRLS`), acionadas via `PrismaService.withTenant(companyId, ...)`.
 - **Como encaixaria Certificação AT, SAF-T, IVA e Retenções em Produção**:
   - Como faturas `ISSUED` são imutáveis por trigger e correções pós-fatura usam documentos retificativos (`CREDIT_NOTE` / `DEBIT_NOTE` com `parentInvoiceId`), bastaria adicionar em `Invoice`/`InvoiceLine` taxa/isenção de IVA (ex: autoliquidação na construção civil), retenção na fonte, série/numeração sequencial, `ATCUD` e assinatura RSA encadeada (`hash`, `previousInvoiceHash`) no momento da emissão para exportação SAF-T (PT).
