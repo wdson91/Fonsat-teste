@@ -15,3 +15,9 @@ O PR de uma fase para `main` deve aguardar a integração da anterior para não 
 Cada branch de implementação contém em `docs/relatorio-fase-<fase>.md` o que foi feito, contratos, verificações e limites da fase, além dos relatórios herdados. A base documental não apresenta fases como concluídas.
 
 A organização inicial foi feita localmente, sem push ou PR. Login real, frontend e funções posteriores só devem ser considerados prontos quando constarem no relatório da fase correspondente.
+
+## Frontend e próximas etapas
+
+Depois de 2.6, executar 4 antes de 3 e 5, sem renumerar: `fase-4.1/base-frontend` -> `fase-4.2/grelha-trabalhador` -> `fase-4.3/gestao-obras` -> `fase-4.4/faturacao` -> `fase-4.5/integracao`. A fase 3 será revisão/ampliação de testes e a fase 5 integração de infraestrutura; nenhuma delas está concluída por antecipação.
+
+Futuros PRs para main seguem essa dependência, aguardando a integração da branch anterior. Não foram criados PRs nem publicados commits por este fluxo local.
