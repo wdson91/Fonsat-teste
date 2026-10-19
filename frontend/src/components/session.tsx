@@ -63,6 +63,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setSignal(controller.signal);
     setError('');
     if (!id) {
+      try {
+        localStorage.removeItem(selectionKey);
+      } catch {
+        setStorageWarning('Não foi possível guardar a alteração de seleção.');
+      }
       setLoading(false);
       return;
     }

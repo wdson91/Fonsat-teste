@@ -30,7 +30,7 @@ export function apiErrorMessage(status: number, detail?: unknown): string {
 
 export function errorMessage(error: unknown): string {
   if (error instanceof ApiError) return error.message;
-  return 'Sem ligação à API. Os dados locais foram preservados; verifique a rede e tente novamente.';
+  return 'Sem ligação ao servidor. Verifique a rede e tente novamente; o resultado de uma operação interrompida pode precisar de confirmação.';
 }
 
 export async function apiRequest<Result>(
@@ -53,6 +53,8 @@ export async function apiRequest<Result>(
       : {}),
   });
   const result: unknown = await response.json().catch(() => null);
+  if (options.signal?.aborted)
+    throw new DOMException('Pedido cancelado', 'AbortError');
   if (!response.ok) {
     if (response.status === 401 && typeof window !== 'undefined')
       window.dispatchEvent(new Event('fonsat:unauthorized'));

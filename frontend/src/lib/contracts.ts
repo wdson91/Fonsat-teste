@@ -20,6 +20,7 @@ export interface Site extends NamedItem {
 }
 export interface UserOption extends NamedItem {
   role: Role;
+  defaultTrade: NamedItem | null;
 }
 export interface Allocation {
   id: number;

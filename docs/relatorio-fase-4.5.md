@@ -1,0 +1,77 @@
+# Relatório da fase 4.5 — integração visual e funcional
+
+Frontend concluído em branches encadeadas 4.1–4.5, sobre `fase-2.6/faturacao`. Esta fase valida os quatro papéis contra os endpoints reais, corrige persistência/concorrência de persona, acessibilidade dos selects, navegação semanal e apresentação de erros. O detalhe usa “Valores da emissão”. Não foram criados mocks de negócio, cálculos financeiros no navegador, push, PR ou merge.
+
+## Verificação executada
+
+- Build de produção Next.js e TypeScript concluídos em checkout isolado do código versionado.
+- 8 testes unitários do frontend: datas de Lisboa/DST, valores monetários exatos, correções, seleção das famílias atuais, persistência e erros.
+- 45 testes do backend em 6 suites, bancos descartáveis, todos aprovados (`--runInBand --testTimeout=30000`). Uma execução concorrente anterior atingiu o timeout de limpeza de 5 segundos; a repetição com 30 segundos terminou sem falhas.
+- 12 cenários Playwright contra API real, Chromium 156.0.8078.4, desktop 1440×1000 e móvel 390×844, sem erros JavaScript. O navegador usa America/Los_Angeles para verificar independência das datas de Lisboa.
+- Prova adicional do cliente em Asia/Tokyo: líquido €65, sem identidade do trabalhador, controlos administrativos ou transbordamento horizontal móvel.
+
+Cenários: rascunho incompleto/reload/envio; correção do encarregado sem preços; prévia com pendências separadas e conflito 409; €80 → correção €70 → crédito €10 → débito €5 = €65; tarifa histórica e trabalho atrasado na competência seguinte; atribuição administrativa do responsável e escopo do encarregado; criação/transferência/encerramento com fim exclusivo; offline/reload/reenvio com UUID estável; resposta perdida após commit e replay sem duplicação; armazenamento corrompido preservado e separação por empresa; resposta tardia da persona anterior descartada; quota de armazenamento impede POST sem persistência prévia.
+
+Capturas locais ignoradas pelo Git, em `frontend/.qa/`: `desktop-worker.png`, `mobile-worker.png`, `desktop-sites.png`, `desktop-billing.png`, `desktop-invoice.png`, `desktop-client.png` e `mobile-client.png`. Foram revistas visualmente as vistas trabalhador móvel, gestão e faturação desktop e detalhe da fatura; o cliente desktop também recebeu revisão independente. Resultados em `results.json`, `client-check.json`, `backend-tests.log` e `build.log`. As capturas precedem apenas a troca de texto do selo.
+
+## Reprodução local
+
+Requer Node >=22.14, PostgreSQL e variáveis do backend conforme README. Usar checkout sem alterações externas e dependências instaladas. O harness cria banco descartável e fixtures próprias, sem reset do seed de demonstração.
+
+```sh
+cd backend
+QA_FIXTURES_PATH=../frontend/.qa/fixtures.json node -r ts-node/register test/frontend-preview.ts
+```
+
+Em outro terminal:
+
+```sh
+cd frontend
+NEXT_PUBLIC_API_URL=http://localhost:3101 npm run dev -- --port 3100
+```
+
+E em outro terminal de `frontend`:
+
+```sh
+npx playwright install chromium
+npm run smoke
+```
+
+Nesta execução foi reutilizado Chromium já instalado, passando `PLAYWRIGHT_CHROMIUM_PATH`; não foi necessário descarregar navegador. `QA_FRONTEND_URL` e `QA_FIXTURES_PATH` permitem mudar os caminhos. O smoke altera suas fixtures: reiniciar o harness antes de repetir. Ctrl+C encerra o harness e elimina seu banco. Os serviços de QA 3100/3101 são próprios; os serviços existentes 3000/3001 não são encerrados.
+
+## Preservação e limites
+
+A validação foi realizada em checkout temporário do backend versionado e das alterações desta fase. Foram preservadas fora dos commits alterações paralelas em `backend/prisma/schema.prisma`, `backend/prisma/seed.ts`, `backend/src/operations/operations.dto.ts`, `backend/src/operations/operations.spec.ts`, `backend/tsconfig.json`, `frontend/src/app/management.css`, `frontend/src/lib/corrections.ts` e a grelha semanal/data-only de `frontend/src/components/sites-page.tsx`. Este último contém também pequenos ajustes desta fase, comitados pela cópia isolada para não incorporar a grelha externa. `docs/fase2-plan.md` continua não rastreado; `frontend/next-env.d.ts` pode refletir o servidor Next local em execução. Não se declara validada a combinação com essas alterações paralelas.
+
+Offline funciona depois de carregar a aplicação; não há PWA/cache para arranque sem rede. Limpar dados do navegador perde rascunhos locais. A persona por `x-user-id` é demonstração, sem autenticação real. Não há PDF/email/pagamentos. A fase 3 de revisão ampliada e a fase 5 de infraestrutura continuam pendentes. Main e branches anteriores permanecem inalteradas.
+
+
+## Commit final das alterações locais
+
+Após a entrega da fase 4.5, o pedido de commit final incluiu a grelha semanal que permanecia fora dos commits anteriores. Foram incorporados a navegação/filtro semanal, editor rápido de alocações, cópia da semana anterior, indicação de conflitos, estilos e datas de calendário no frontend/API. O seed passa a iniciar alocações à meia-noite de Lisboa; não foi executado contra o banco de demonstração. A remoção de `baseUrl` no tsconfig também foi mantida.
+
+A remoção local de `url = env("DATABASE_URL")` foi corrigida: o Prisma 6 instalado exige esse datasource. Não há alteração estrutural de tabelas nem nova migration. `docs/fase2-plan.md` permanece fora do commit, assim como eventuais alterações do ficheiro gerado `frontend/next-env.d.ts`.
+
+Verificação desta combinação: Prisma validate, build do backend, build de produção do frontend com TypeScript, 45 testes backend (6 suites, bancos descartáveis) e 8 testes frontend aprovados. Os 12 cenários de navegador descritos acima correspondem à integração anterior; não foram repetidos para a nova grelha semanal neste commit final.
+
+
+## Distribuição semanal conforme referência
+
+A distribuição foi simplificada para uma tabela trabalhador × segunda–domingo. O cabeçalho apresenta semana anterior, segunda-feira em YYYY-MM-DD, semana seguinte e cópia da semana anterior. Cada linha apresenta nome e ofício habitual do cadastro, sem inferir o ofício pelo nome ou por uma alocação antiga. A API `/users` acrescenta somente `defaultTrade: {id, name} | null`, na mesma transação com escopo de empresa e papéis ADMIN/FOREMAN; não expõe preços.
+
+“Livre” abre um único formulário abaixo da tabela com trabalhador/dia fixos, Obra, Ofício, Guardar distribuição e Cancelar. O ofício habitual vem selecionado se estiver disponível; outro ofício da empresa continua permitido. Guardar envia o dia selecionado e o dia de calendário seguinte como fim exclusivo, sem somar 24 horas UTC. Semana/filtros novos fecham a seleção antiga. Pedidos em curso bloqueiam novos cliques; conflitos 409 preservam os valores no formulário.
+
+Células ocupadas mostram obra/ofício e abrem o contexto do período existente. Alocações abertas usam os controlos existentes de transferência/encerramento; períodos com fim definido não são sobrescritos, de acordo com a API atual. Ações sobre uma alocação de vários dias não fingem editar isoladamente um dia e não eliminam história. O encarregado vê somente as obras/alocações sob a sua responsabilidade; um conflito com período fora desse escopo é recusado pelo backend sem revelar dados de outra obra.
+
+A cópia reproduz cada dia da semana anterior, incluindo o fim de semana, somente nos dias de destino livres. Mantém dias ocupados, respeita filtros de trabalhador/obra e apresenta contagens de dias copiados, preservados e conflitos. Cada dia é uma operação própria, sem garantia de atomicidade da semana; falha de rede interrompe a sequência com resumo parcial. Repetir a cópia não substitui distribuições existentes. A grelha consulta o catálogo completo autorizado de alocações independentemente dos filtros temporais da lista abaixo, para evitar apresentar períodos filtrados como livres.
+
+No desktop os sete dias cabem na tabela. No móvel apenas a tabela desliza horizontalmente, com a coluna do trabalhador fixa; o editor fica empilhado e cabe na largura da página. Correções, pendências e gestão de períodos continuam disponíveis abaixo.
+
+Validação: build backend e frontend/TypeScript; 45 testes backend aprovados (incluindo projeção de ofício, papel e isolamento); 10 testes frontend aprovados, com dois novos testes de ofício habitual, limites exclusivos/DST de 25 horas e cópia diária sem sobreposição. Browser Chromium 156.0.8078.4 contra banco descartável/API real, fuso America/Los_Angeles: clique livre, outro ofício guardado, 409 com formulário preservado, navegação limpa seleção, cópia sem sobrescrever, repetição sem duplicar, contexto de período ocupado, escopos de papel e layout desktop/móvel. Sem erros JavaScript. Capturas revistas: `frontend/.qa/distribution-desktop.png`, `distribution-mobile-grid.png`, `distribution-mobile-editor.png`; resultados em `distribution-results.json`.
+
+Para repetir, iniciar o harness descrito acima com `QA_FIXTURES_PATH=../frontend/.qa/distribution-fixtures.json`, frontend na porta 3100 com API 3101, e executar em frontend `node qa/distribution.mjs` (ou definir `PLAYWRIGHT_CHROMIUM_PATH` para Chromium existente). Reiniciar o harness entre execuções. Serviços e banco descartáveis de QA foram encerrados após a validação; serviços de demonstração existentes preservados. `docs/fase2-plan.md` continua fora do commit.
+
+
+### Remoção da listagem duplicada
+
+A tabela “Distribuição de trabalhadores” foi removida: a grelha semanal passa a ser a única listagem de distribuições. O catálogo/fetch exclusivo da tabela foi eliminado. Clicar numa célula ocupada continua a apresentar o período e as ações permitidas de transferência/encerramento no editor existente; não houve mudança no backend ou eliminação de dados/histórico. Registos de trabalho e pendências permanecem na página. O smoke foi adaptado para abrir essas ações pela célula da grelha. Build frontend/TypeScript e verificação de diff aprovados.

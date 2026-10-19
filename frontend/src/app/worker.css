@@ -8,6 +8,23 @@
   color: #71838c;
   border-bottom: 1px solid var(--line);
 }
+.week-picker {
+  font-size: 9px;
+  max-width: 135px;
+}
+.week-picker input {
+  min-height: 30px;
+  font-size: 10px;
+  padding: 5px 7px;
+}
+@media (max-width: 720px) {
+  .card-header:has(.week-picker) {
+    flex-wrap: wrap;
+  }
+  .card-header:has(.week-picker) > .actions {
+    width: 100%;
+  }
+}
 .day-section {
   padding: 18px 23px;
   border-bottom: 1px solid var(--line);
@@ -50,10 +67,9 @@
 }
 .turn-grid {
   display: grid;
-  grid-template-columns: minmax(120px, 1.6fr) minmax(120px, 1.2fr) minmax(
-      90px,
-      0.8fr
-    ) minmax(90px, 0.8fr) 110px 26px;
+  grid-template-columns:
+    minmax(120px, 1.6fr) minmax(120px, 1.2fr) minmax(90px, 0.8fr)
+    minmax(90px, 0.8fr) 110px 26px;
   gap: 11px;
   align-items: end;
 }

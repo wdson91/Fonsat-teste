@@ -52,6 +52,143 @@
 .correction-times > label {
   max-width: 230px;
 }
+.dist-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 12px;
+  padding: 18px 20px;
+  border-bottom: 1px solid var(--line);
+}
+.dist-scroll {
+  position: relative;
+}
+.dist-grid-table {
+  table-layout: fixed;
+  min-width: 1050px;
+}
+.dist-grid-table th,
+.dist-grid-table td {
+  padding: 14px 10px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--line);
+}
+.dist-grid-table thead th {
+  text-align: center;
+  white-space: nowrap;
+}
+.dist-grid-table th:first-child {
+  width: 200px;
+  min-width: 200px;
+  text-align: left;
+  position: sticky;
+  left: 0;
+  background: #fff;
+  z-index: 1;
+  border-right: 1px solid var(--line);
+}
+.dist-grid-table thead th:first-child {
+  background: #f8fafb;
+  z-index: 2;
+}
+.dist-worker-cell strong {
+  display: block;
+  font-size: 13px;
+  color: var(--ink);
+  text-transform: none;
+  letter-spacing: normal;
+}
+.dist-worker-cell span {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-top: 6px;
+  text-transform: none;
+  letter-spacing: normal;
+}
+.dist-cell-btn {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: 100%;
+  min-width: 100px;
+  min-height: 54px;
+  padding: 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: normal;
+}
+.dist-cell-btn.free {
+  background: #f8fafb;
+  border: 1px solid #dce4e8;
+  color: #526471;
+  font-weight: 400;
+}
+.dist-cell-btn.assigned {
+  background: #eaf5f3;
+  border: 1px solid #c7e1db;
+  color: #155c55;
+}
+.dist-cell-btn span {
+  display: block;
+  font-size: 11px;
+  font-weight: 400;
+}
+.dist-cell-btn[aria-pressed='true'] {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.dist-quick-editor {
+  padding: 20px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 14px;
+  background: #fcfdfd;
+  border-top: 1px solid var(--line);
+}
+.dist-editor-heading {
+  align-self: center;
+  font-size: 13px;
+}
+.dist-quick-editor label {
+  flex: 1 1 180px;
+  min-width: 0;
+}
+.dist-quick-editor > p {
+  flex-basis: 100%;
+  margin: 0;
+}
+@media (max-width: 720px) {
+  .dist-grid-table th:first-child {
+    width: 145px;
+    min-width: 145px;
+    max-width: 145px;
+  }
+  .dist-worker-cell strong {
+    overflow-wrap: anywhere;
+  }
+  .dist-toolbar {
+    gap: 10px;
+    padding: 14px;
+  }
+  .dist-quick-editor {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    padding: 14px;
+  }
+  .dist-editor-heading {
+    align-self: flex-start;
+  }
+  .dist-quick-editor label {
+    flex: none;
+    width: 100%;
+  }
+}
 @media (max-width: 720px) {
   .section-heading {
     display: block;

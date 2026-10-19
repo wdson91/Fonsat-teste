@@ -156,7 +156,7 @@ export function InvoicePage() {
       <section className="card">
         <div className="card-header">
           <h2>De onde vem cada valor</h2>
-          <span className="badge gray">Snapshots históricos</span>
+          <span className="badge gray">Valores da emissão</span>
         </div>
         <div className="table-wrap">
           <table>

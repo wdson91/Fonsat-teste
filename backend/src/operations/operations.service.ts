@@ -49,7 +49,12 @@ export class OperationsService {
       const where = { companyId: persona.companyId, role: filters.role };
       return transaction.user.findMany({
         where,
-        select: { id: true, name: true, role: true },
+        select: {
+          id: true,
+          name: true,
+          role: true,
+          defaultTrade: { select: { id: true, name: true } },
+        },
         orderBy: { id: 'asc' },
       });
     });

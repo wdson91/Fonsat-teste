@@ -21,3 +21,5 @@ A organização inicial foi feita localmente, sem push ou PR. Login real, fronte
 Depois de 2.6, executar 4 antes de 3 e 5, sem renumerar: `fase-4.1/base-frontend` -> `fase-4.2/grelha-trabalhador` -> `fase-4.3/gestao-obras` -> `fase-4.4/faturacao` -> `fase-4.5/integracao`. A fase 3 será revisão/ampliação de testes e a fase 5 integração de infraestrutura; nenhuma delas está concluída por antecipação.
 
 Futuros PRs para main seguem essa dependência, aguardando a integração da branch anterior. Não foram criados PRs nem publicados commits por este fluxo local.
+
+As branches 4.1–4.5 possuem implementação e relatórios locais. A integração visual/funcional está documentada em [relatorio-fase-4.5.md](relatorio-fase-4.5.md); isso não significa merge em main nem conclusão das fases 3 e 5.

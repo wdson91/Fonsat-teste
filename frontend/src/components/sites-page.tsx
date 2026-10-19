@@ -11,23 +11,34 @@ import type {
   Site,
   UserOption,
 } from '../lib/contracts';
-import { displayDay, lisbonDay, lisbonTime } from '../lib/lisbon';
+import {
+  calendarShift,
+  displayDay,
+  lisbonDay,
+  lisbonTime,
+  weekStart,
+} from '../lib/lisbon';
 import {
   correctionTurns,
   correctedEvents,
-  formTimestamp,
   type CorrectionTurn,
 } from '../lib/corrections';
 import { currentRecords } from '../lib/records';
+import {
+  allocationOnDay,
+  habitualTrade,
+  previousWeekPlan,
+} from '../lib/distribution';
 
 const emptyFilters = { siteId: '', workerId: '', from: '', to: '' };
+const weekdayLabels = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
 interface Catalog {
   sites: Site[];
   workers: UserOption[];
   foremen: UserOption[];
   clients: NamedItem[];
   trades: NamedItem[];
-  allocations: Allocation[];
+  gridAllocations: Allocation[];
   records: AttendanceRecord[];
 }
 const emptyCatalog: Catalog = {
@@ -36,7 +47,7 @@ const emptyCatalog: Catalog = {
   foremen: [],
   clients: [],
   trades: [],
-  allocations: [],
+  gridAllocations: [],
   records: [],
 };
 interface AllocationAction {
@@ -46,6 +57,13 @@ interface AllocationAction {
   tradeId: string;
   startDate: string;
   endDate: string;
+}
+interface GridCellSelection {
+  worker: UserOption;
+  day: string;
+  activeAllocation: Allocation | null;
+  siteId: string;
+  tradeId: string;
 }
 interface CorrectionEditor {
   record: AttendanceRecord;
@@ -80,9 +98,38 @@ export function SitesPage() {
   });
   const [allocationAction, setAllocationAction] =
     useState<AllocationAction | null>(null);
+  const [gridWeek, setGridWeek] = useState(() => weekStart(lisbonDay()));
+  const [gridError, setGridError] = useState('');
+  const [selectedCell, setSelectedCell] = useState<GridCellSelection | null>(
+    null,
+  );
   const [correction, setCorrection] = useState<CorrectionEditor | null>(null);
   const [rateRecord, setRateRecord] = useState<AttendanceRecord | null>(null);
   const [rateReason, setRateReason] = useState('');
+
+  useEffect(() => {
+    setSelectedCell(null);
+    setGridError('');
+  }, [appliedFilters]);
+
+  useEffect(() => {
+    if (correction)
+      document
+        .getElementById('correction-editor')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [correction?.record.id]);
+  useEffect(() => {
+    if (rateRecord)
+      document
+        .getElementById('rate-editor')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [rateRecord?.id]);
+  useEffect(() => {
+    if (allocationAction)
+      document
+        .getElementById('allocation-editor')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }, [allocationAction?.allocation.id, allocationAction?.mode]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -106,7 +153,7 @@ export function SitesPage() {
         signal: requestSignal,
       }),
       apiRequest<NamedItem[]>('/trades', persona.id, { signal: requestSignal }),
-      apiRequest<Allocation[]>(`/allocations?${query}`, persona.id, {
+      apiRequest<Allocation[]>('/allocations', persona.id, {
         signal: requestSignal,
       }),
       apiRequest<AttendanceRecord[]>(
@@ -116,7 +163,15 @@ export function SitesPage() {
       ),
     ])
       .then(
-        ([sites, workers, foremen, clients, trades, allocations, records]) => {
+        ([
+          sites,
+          workers,
+          foremen,
+          clients,
+          trades,
+          gridAllocations,
+          records,
+        ]) => {
           if (!requestSignal.aborted)
             setCatalog({
               sites,
@@ -124,7 +179,7 @@ export function SitesPage() {
               foremen,
               clients,
               trades,
-              allocations,
+              gridAllocations,
               records,
             });
         },
@@ -182,10 +237,8 @@ export function SitesPage() {
         workerId: Number(allocationForm.workerId),
         siteId: Number(allocationForm.siteId),
         tradeId: Number(allocationForm.tradeId),
-        startDate: formTimestamp(allocationForm.startDate),
-        ...(allocationForm.endDate
-          ? { endDate: formTimestamp(allocationForm.endDate) }
-          : {}),
+        startDate: allocationForm.startDate,
+        ...(allocationForm.endDate ? { endDate: allocationForm.endDate } : {}),
       };
       if (await save('/allocations', payload)) {
         setShowAllocation(false);
@@ -210,13 +263,13 @@ export function SitesPage() {
     try {
       const payload =
         allocationAction.mode === 'end'
-          ? { endDate: formTimestamp(allocationAction.endDate) }
+          ? { endDate: allocationAction.endDate }
           : {
               siteId: Number(allocationAction.siteId),
               tradeId: Number(allocationAction.tradeId),
-              startDate: formTimestamp(allocationAction.startDate),
+              startDate: allocationAction.startDate,
               ...(allocationAction.endDate
-                ? { endDate: formTimestamp(allocationAction.endDate) }
+                ? { endDate: allocationAction.endDate }
                 : {}),
             };
       if (
@@ -228,7 +281,7 @@ export function SitesPage() {
         setAllocationAction(null);
     } catch (failure) {
       setError(
-        failure instanceof Error ? failure.message : 'Verifique os horários.',
+        failure instanceof Error ? failure.message : 'Verifique as datas.',
       );
     }
   }
@@ -267,10 +320,97 @@ export function SitesPage() {
       record.status === 'PENDING_RATE' ||
       record.status === 'PENDING_CORRECTION',
   ).length;
-  const dateTime = (value: string) =>
-    `${displayDay(lisbonDay(new Date(value)))} · ${lisbonTime(value)}`;
+  const allocationDay = (value: string) =>
+    displayDay(lisbonDay(new Date(value)));
   const findName = (items: NamedItem[], id: number) =>
     items.find((item) => item.id === id)?.name ?? `#${id}`;
+
+  const weekDays = Array.from({ length: 7 }, (_, index) =>
+    calendarShift(gridWeek, index),
+  );
+  const visibleWorkers = catalog.workers.filter(
+    (worker) =>
+      !appliedFilters.workerId || worker.id === Number(appliedFilters.workerId),
+  );
+  const findAllocationForDay = (workerId: number, day: string) =>
+    allocationOnDay(catalog.gridAllocations, workerId, day);
+
+  async function saveDistribution(event: React.FormEvent) {
+    event.preventDefault();
+    if (!selectedCell || mutation.current) return;
+    setGridError('');
+    if (!selectedCell.siteId || !selectedCell.tradeId) {
+      setGridError('Escolha a obra e o ofício.');
+      return;
+    }
+    if (selectedCell.activeAllocation) return;
+    const ok = await save('/allocations', {
+      workerId: selectedCell.worker.id,
+      siteId: Number(selectedCell.siteId),
+      tradeId: Number(selectedCell.tradeId),
+      startDate: selectedCell.day,
+      endDate: calendarShift(selectedCell.day, 1),
+    });
+    if (ok) {
+      setMessage(
+        `Distribuição de ${selectedCell.worker.name} em ${selectedCell.day} guardada.`,
+      );
+      setSelectedCell(null);
+    }
+  }
+
+  async function copyPreviousWeek() {
+    if (mutation.current || loading) return;
+    mutation.current = true;
+    setBusy(true);
+    setError('');
+    setMessage('');
+    setGridError('');
+    setSelectedCell(null);
+    const { tasks, preserved } = previousWeekPlan(
+      catalog.gridAllocations,
+      visibleWorkers,
+      gridWeek,
+      appliedFilters.siteId,
+    );
+    let copied = 0,
+      conflicts = 0;
+    let failureMessage = '';
+    try {
+      for (const payload of tasks) {
+        try {
+          await apiRequest('/allocations', persona.id, {
+            method: 'POST',
+            body: payload,
+            signal,
+          });
+          copied++;
+        } catch (failure) {
+          if (signal?.aborted) return;
+          if (failure instanceof ApiError && failure.status === 409) {
+            conflicts++;
+            continue;
+          }
+          failureMessage = errorMessage(failure);
+          break;
+        }
+      }
+      if (!signal?.aborted) {
+        setMessage(
+          `${copied} dia(s) copiado(s); ${preserved} já ocupado(s) preservado(s); ${conflicts} conflito(s). A cópia guarda cada dia separadamente.`,
+        );
+        if (failureMessage)
+          setError(
+            `Cópia interrompida após ${copied} dia(s). ${failureMessage}`,
+          );
+        setRefresh((value) => value + 1);
+      }
+    } finally {
+      mutation.current = false;
+      setBusy(false);
+    }
+  }
+
   return (
     <>
       <PageHeader
@@ -304,6 +444,7 @@ export function SitesPage() {
           <label>
             Obra
             <select
+              aria-label="Obra"
               value={filters.siteId}
               onChange={(event) =>
                 setFilters({ ...filters, siteId: event.target.value })
@@ -320,6 +461,7 @@ export function SitesPage() {
           <label>
             Trabalhador
             <select
+              aria-label="Trabalhador"
               value={filters.workerId}
               onChange={(event) =>
                 setFilters({ ...filters, workerId: event.target.value })
@@ -389,6 +531,7 @@ export function SitesPage() {
               <label>
                 Trabalhador
                 <select
+                  aria-label="Trabalhador"
                   required
                   disabled={busy}
                   value={allocationForm.workerId}
@@ -410,6 +553,7 @@ export function SitesPage() {
               <label>
                 Obra da alocação
                 <select
+                  aria-label="Obra da alocação"
                   required
                   disabled={busy}
                   value={allocationForm.siteId}
@@ -431,6 +575,7 @@ export function SitesPage() {
               <label>
                 Ofício da alocação
                 <select
+                  aria-label="Ofício da alocação"
                   required
                   disabled={busy}
                   value={allocationForm.tradeId}
@@ -454,7 +599,7 @@ export function SitesPage() {
                 <input
                   required
                   disabled={busy}
-                  type="datetime-local"
+                  type="date"
                   value={allocationForm.startDate}
                   onChange={(event) =>
                     setAllocationForm({
@@ -468,7 +613,7 @@ export function SitesPage() {
                 Fim exclusivo · Lisboa (opcional)
                 <input
                   disabled={busy}
-                  type="datetime-local"
+                  type="date"
                   value={allocationForm.endDate}
                   onChange={(event) =>
                     setAllocationForm({
@@ -585,96 +730,272 @@ export function SitesPage() {
         )}
       </section>
       <div className="section-heading">
-        <h2>Distribuição de trabalhadores</h2>
-        <span>Períodos preservados · fim exclusivo</span>
+        <h2>Distribuição semanal</h2>
+        <span>
+          Escolha um dia para distribuir o trabalhador. Datas de Lisboa.
+        </span>
       </div>
-      <section className="card">
+      <section className="card" aria-label="Distribuição semanal">
+        <div className="dist-toolbar">
+          <button
+            type="button"
+            className="secondary compact"
+            disabled={busy || loading}
+            onClick={() => {
+              setGridWeek(calendarShift(gridWeek, -7));
+              setSelectedCell(null);
+              setGridError('');
+            }}
+          >
+            Semana anterior
+          </button>
+          <strong aria-live="polite" data-testid="distribution-week">
+            {gridWeek}
+          </strong>
+          <button
+            type="button"
+            className="secondary compact"
+            disabled={busy || loading}
+            onClick={() => {
+              setGridWeek(calendarShift(gridWeek, 7));
+              setSelectedCell(null);
+              setGridError('');
+            }}
+          >
+            Semana seguinte
+          </button>
+          <button
+            type="button"
+            className="secondary compact"
+            disabled={busy || loading}
+            onClick={() => void copyPreviousWeek()}
+          >
+            Copiar semana anterior
+          </button>
+        </div>
         {loading ? (
-          <div className="loading">A consultar alocações…</div>
-        ) : !catalog.allocations.length ? (
-          <EmptyState title="Sem alocações neste filtro">
-            Crie uma nova distribuição ou altere o período de consulta.
+          <div className="loading">A consultar distribuição…</div>
+        ) : !visibleWorkers.length ? (
+          <EmptyState title="Sem trabalhadores disponíveis">
+            Nenhum trabalhador encontrado para este filtro.
           </EmptyState>
         ) : (
-          <div className="table-wrap">
-            <table>
+          <div
+            className="table-wrap dist-scroll"
+            tabIndex={0}
+            aria-label="Tabela de distribuição, deslize para consultar todos os dias"
+          >
+            <table className="dist-grid-table">
               <thead>
                 <tr>
-                  <th>Trabalhador</th>
-                  <th>Obra / ofício</th>
-                  <th>Período · Lisboa</th>
-                  <th>Ações</th>
+                  <th scope="col">Trabalhador</th>
+                  {weekDays.map((day, index) => (
+                    <th scope="col" key={day}>
+                      <span>{weekdayLabels[index]}</span>
+                      <br />
+                      {day.slice(5)}
+                    </th>
+                  ))}
                 </tr>
               </thead>
               <tbody>
-                {catalog.allocations.map((allocation) => (
-                  <tr key={allocation.id}>
-                    <td>
-                      <strong>{allocation.worker.name}</strong>
-                      <small className="muted">Alocação #{allocation.id}</small>
-                    </td>
-                    <td>
-                      <strong>{allocation.site.name}</strong>
-                      {allocation.trade.name}
-                    </td>
-                    <td>
-                      {dateTime(allocation.startDate)}
-                      <br />
-                      <small className="muted">
-                        {allocation.endDate
-                          ? `até ${dateTime(allocation.endDate)} (exclusivo)`
-                          : 'Sem fim definido'}
-                      </small>
-                    </td>
-                    <td>
-                      {allocation.endDate ? (
-                        <span className="badge gray">Histórico fechado</span>
-                      ) : (
-                        <div className="actions">
-                          <button
-                            className="secondary compact"
-                            disabled={busy}
-                            onClick={() =>
-                              setAllocationAction({
-                                allocation,
-                                mode: 'transfer',
-                                siteId: String(allocation.siteId),
-                                tradeId: String(allocation.tradeId),
-                                startDate: '',
-                                endDate: '',
-                              })
-                            }
-                          >
-                            Transferir
-                          </button>
-                          <button
-                            className="quiet compact"
-                            disabled={busy}
-                            onClick={() =>
-                              setAllocationAction({
-                                allocation,
-                                mode: 'end',
-                                siteId: '',
-                                tradeId: '',
-                                startDate: '',
-                                endDate: '',
-                              })
-                            }
-                          >
-                            Encerrar
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
+                {visibleWorkers.map((worker) => {
+                  const usual = habitualTrade(worker, catalog.trades);
+                  return (
+                    <tr key={worker.id}>
+                      <th scope="row" className="dist-worker-cell">
+                        <strong>{worker.name}</strong>
+                        <span>
+                          Ofício habitual: {usual?.name ?? 'Não definido'}
+                        </span>
+                      </th>
+                      {weekDays.map((day) => {
+                        const planned = findAllocationForDay(worker.id, day);
+                        return (
+                          <td key={day}>
+                            <button
+                              type="button"
+                              disabled={busy}
+                              aria-label={`${worker.name} · ${day} · ${planned ? `${planned.site.name}, ${planned.trade.name}` : 'Livre'}`}
+                              aria-pressed={
+                                selectedCell?.worker.id === worker.id &&
+                                selectedCell.day === day
+                              }
+                              className={`dist-cell-btn ${planned ? 'assigned' : 'free'}`}
+                              onClick={() => {
+                                setGridError('');
+                                setSelectedCell({
+                                  worker,
+                                  day,
+                                  activeAllocation: planned,
+                                  siteId: planned
+                                    ? String(planned.siteId)
+                                    : appliedFilters.siteId,
+                                  tradeId: planned
+                                    ? String(planned.tradeId)
+                                    : usual
+                                      ? String(usual.id)
+                                      : '',
+                                });
+                              }}
+                            >
+                              {planned ? (
+                                <>
+                                  <strong>{planned.site.name}</strong>
+                                  <span>{planned.trade.name}</span>
+                                </>
+                              ) : (
+                                'Livre'
+                              )}
+                            </button>
+                          </td>
+                        );
+                      })}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
         )}
+        {selectedCell && (
+          <form
+            className="dist-quick-editor"
+            aria-label="Editar distribuição"
+            onSubmit={saveDistribution}
+          >
+            <strong className="dist-editor-heading">
+              {selectedCell.worker.name} · {selectedCell.day}
+            </strong>
+            {selectedCell.activeAllocation ? (
+              <>
+                <p className="muted">
+                  Distribuído em {selectedCell.activeAllocation.site.name} como{' '}
+                  {selectedCell.activeAllocation.trade.name}. Período desde{' '}
+                  {allocationDay(selectedCell.activeAllocation.startDate)}
+                  {selectedCell.activeAllocation.endDate
+                    ? ` até ${allocationDay(selectedCell.activeAllocation.endDate)} (exclusivo)`
+                    : ', sem fim definido'}
+                  . Alterações de período preservam o histórico.
+                </p>
+                {!selectedCell.activeAllocation.endDate ? (
+                  <div className="actions">
+                    <button
+                      type="button"
+                      className="secondary compact"
+                      disabled={busy}
+                      onClick={() =>
+                        setAllocationAction({
+                          allocation: selectedCell.activeAllocation!,
+                          mode: 'transfer',
+                          siteId: selectedCell.siteId,
+                          tradeId: selectedCell.tradeId,
+                          startDate: selectedCell.day,
+                          endDate: '',
+                        })
+                      }
+                    >
+                      Transferir distribuição
+                    </button>
+                    <button
+                      type="button"
+                      className="secondary compact"
+                      disabled={busy}
+                      onClick={() =>
+                        setAllocationAction({
+                          allocation: selectedCell.activeAllocation!,
+                          mode: 'end',
+                          siteId: selectedCell.siteId,
+                          tradeId: selectedCell.tradeId,
+                          startDate: '',
+                          endDate: calendarShift(selectedCell.day, 1),
+                        })
+                      }
+                    >
+                      Encerrar período
+                    </button>
+                  </div>
+                ) : (
+                  <p className="muted">
+                    Este período já tem fim definido e não pode ser sobrescrito.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                <label>
+                  Obra
+                  <select
+                    aria-label="Obra da distribuição"
+                    required
+                    disabled={busy}
+                    value={selectedCell.siteId}
+                    onChange={(event) =>
+                      setSelectedCell({
+                        ...selectedCell,
+                        siteId: event.target.value,
+                      })
+                    }
+                  >
+                    <option value="">Selecionar…</option>
+                    {catalog.sites.map((site) => (
+                      <option key={site.id} value={site.id}>
+                        {site.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Ofício
+                  <select
+                    aria-label="Ofício da distribuição"
+                    required
+                    disabled={busy}
+                    value={selectedCell.tradeId}
+                    onChange={(event) =>
+                      setSelectedCell({
+                        ...selectedCell,
+                        tradeId: event.target.value,
+                      })
+                    }
+                  >
+                    <option value="">Selecionar…</option>
+                    {catalog.trades.map((trade) => (
+                      <option key={trade.id} value={trade.id}>
+                        {trade.id === selectedCell.worker.defaultTrade?.id
+                          ? `Ofício habitual: ${trade.name}`
+                          : trade.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <button
+                  type="submit"
+                  className="compact"
+                  disabled={busy || loading}
+                >
+                  {busy ? 'A guardar…' : 'Guardar distribuição'}
+                </button>
+              </>
+            )}
+            <button
+              type="button"
+              className="secondary compact"
+              disabled={busy}
+              onClick={() => {
+                setSelectedCell(null);
+                setGridError('');
+              }}
+            >
+              Cancelar
+            </button>
+            {gridError && <p role="alert">{gridError}</p>}
+            {error && <p role="alert">{error}</p>}
+          </form>
+        )}
       </section>
       {allocationAction && (
-        <section className="card">
+        <section id="allocation-editor" className="card">
           <div className="card-header">
             <div>
               <h2>
@@ -704,6 +1025,7 @@ export function SitesPage() {
                   <label>
                     Obra de destino
                     <select
+                      aria-label="Obra de destino"
                       required
                       disabled={busy}
                       value={allocationAction.siteId}
@@ -724,6 +1046,7 @@ export function SitesPage() {
                   <label>
                     Ofício no destino
                     <select
+                      aria-label="Ofício no destino"
                       required
                       disabled={busy}
                       value={allocationAction.tradeId}
@@ -746,7 +1069,7 @@ export function SitesPage() {
                     <input
                       required
                       disabled={busy}
-                      type="datetime-local"
+                      type="date"
                       value={allocationAction.startDate}
                       onChange={(event) =>
                         setAllocationAction({
@@ -764,7 +1087,7 @@ export function SitesPage() {
                 <input
                   required={allocationAction.mode === 'end'}
                   disabled={busy}
-                  type="datetime-local"
+                  type="date"
                   value={allocationAction.endDate}
                   onChange={(event) =>
                     setAllocationAction({
@@ -909,7 +1232,7 @@ export function SitesPage() {
         )}
       </section>
       {correction && (
-        <section className="card">
+        <section id="correction-editor" className="card">
           <div className="card-header">
             <h2>Corrigir registo #{correction.record.id}</h2>
             <button
@@ -933,6 +1256,7 @@ export function SitesPage() {
               <label>
                 Obra de destino da correção
                 <select
+                  aria-label="Obra de destino da correção"
                   required
                   disabled={busy}
                   value={correction.siteId}
@@ -950,6 +1274,7 @@ export function SitesPage() {
               <label>
                 Ofício da correção
                 <select
+                  aria-label="Ofício da correção"
                   required
                   disabled={busy}
                   value={correction.tradeId}
@@ -1068,7 +1393,7 @@ export function SitesPage() {
         </section>
       )}
       {rateRecord && (
-        <section className="card">
+        <section id="rate-editor" className="card">
           <div className="card-header">
             <h2>Resolver preço do registo #{rateRecord.id}</h2>
             <button

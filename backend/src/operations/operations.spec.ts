@@ -70,7 +70,24 @@ describe('fase 2.2: obras e alocacoes com PostgreSQL', () => {
       200,
     );
     expect(workers.body.length).toBeGreaterThan(1);
-    expect(Object.keys(workers.body[0]).sort()).toEqual(['id', 'name', 'role']);
+    expect(Object.keys(workers.body[0]).sort()).toEqual([
+      'defaultTrade',
+      'id',
+      'name',
+      'role',
+    ]);
+    expect(
+      workers.body.find((item) => item.id === worker.id).defaultTrade,
+    ).toEqual({ id: testData.trade.id, name: testData.trade.name });
+    expect(
+      workers.body.some((item) => item.id === testData.foreignWorker.id),
+    ).toBe(false);
+    const adminWorkers = await get('/users?role=WORKER', testData.admin).expect(
+      200,
+    );
+    expect(
+      adminWorkers.body.find((item) => item.id === worker.id).defaultTrade.id,
+    ).toBe(testData.trade.id);
     const trades = await get('/trades', worker).expect(200);
     expect(trades.body.map((item) => item.id)).toEqual([
       testData.trade.id,
@@ -204,7 +221,13 @@ describe('fase 2.2: obras e alocacoes com PostgreSQL', () => {
     expect(dateInput('2026-10-26').toISOString()).toBe(
       '2026-10-26T00:00:00.000Z',
     );
-    for (const startDate of ['2026-02-30', '2026-10-01T10:00:00', 'nada', null])
+    for (const startDate of [
+      '2026-02-30',
+      '2026-10-01T10:00:00',
+      '2026-10-01T12:00:00+01:00',
+      'nada',
+      null,
+    ])
       await create(testData.admin, { startDate }).expect(400);
     await create(testData.admin, { startDate: '0000-01-01' }).expect(400);
     await create(testData.admin, { endDate: '2026-10-01' }).expect(400);
@@ -214,7 +237,7 @@ describe('fase 2.2: obras e alocacoes com PostgreSQL', () => {
       endDate: '2026-10-03',
     }).expect(201);
     await create(testData.admin, {
-      startDate: '2026-10-01T12:00:00+01:00',
+      startDate: '2026-10-01',
       endDate: '2026-10-02',
     }).expect(409);
     const period = await get(
