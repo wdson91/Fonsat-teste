@@ -67,6 +67,7 @@ export function SitesPage() {
   const [busy, setBusy] = useState(false);
   const mutation = useRef(false);
   const [error, setError] = useState('');
+  const [loadError, setLoadError] = useState('');
   const [message, setMessage] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [showAllocation, setShowAllocation] = useState(false);
@@ -92,7 +93,7 @@ export function SitesPage() {
       Object.entries(appliedFilters).filter(([, value]) => value),
     );
     setLoading(true);
-    setError('');
+    setLoadError('');
     void Promise.all([
       apiRequest<Site[]>('/sites', persona.id, { signal: requestSignal }),
       apiRequest<UserOption[]>('/users?role=WORKER', persona.id, {
@@ -129,7 +130,7 @@ export function SitesPage() {
         },
       )
       .catch((failure) => {
-        if (!requestSignal.aborted) setError(errorMessage(failure));
+        if (!requestSignal.aborted) setLoadError(errorMessage(failure));
       })
       .finally(() => {
         if (!requestSignal.aborted) setLoading(false);
@@ -288,7 +289,9 @@ export function SitesPage() {
           + Nova alocação
         </button>
       </PageHeader>
-      {error && <Notice tone="error">{error}</Notice>}
+      {(error || loadError) && (
+        <Notice tone="error">{error || loadError}</Notice>
+      )}
       {message && <Notice tone="success">{message}</Notice>}
       <section className="card">
         <form

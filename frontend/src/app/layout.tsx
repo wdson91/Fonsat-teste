@@ -4,6 +4,7 @@ import { SessionProvider } from '../components/session';
 import './globals.css';
 import './worker.css';
 import './management.css';
+import './billing.css';
 export const metadata: Metadata = {
   title: 'Fonsat — Operações de obra',
   description: 'Assiduidade, equipas e faturação com histórico.',
