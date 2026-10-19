@@ -70,7 +70,24 @@ describe('fase 2.2: obras e alocacoes com PostgreSQL', () => {
       200,
     );
     expect(workers.body.length).toBeGreaterThan(1);
-    expect(Object.keys(workers.body[0]).sort()).toEqual(['id', 'name', 'role']);
+    expect(Object.keys(workers.body[0]).sort()).toEqual([
+      'defaultTrade',
+      'id',
+      'name',
+      'role',
+    ]);
+    expect(
+      workers.body.find((item) => item.id === worker.id).defaultTrade,
+    ).toEqual({ id: testData.trade.id, name: testData.trade.name });
+    expect(
+      workers.body.some((item) => item.id === testData.foreignWorker.id),
+    ).toBe(false);
+    const adminWorkers = await get('/users?role=WORKER', testData.admin).expect(
+      200,
+    );
+    expect(
+      adminWorkers.body.find((item) => item.id === worker.id).defaultTrade.id,
+    ).toBe(testData.trade.id);
     const trades = await get('/trades', worker).expect(200);
     expect(trades.body.map((item) => item.id)).toEqual([
       testData.trade.id,

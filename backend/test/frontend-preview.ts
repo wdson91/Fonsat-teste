@@ -57,6 +57,7 @@ async function main() {
         companyId: sample.companyA.id,
         name: 'Luís Planeamento · QA',
         role: 'WORKER',
+        defaultTradeId: sample.trade.id,
       },
     });
     const customer = await database.prisma.user.create({
