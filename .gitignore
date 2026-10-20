@@ -13,3 +13,5 @@ coverage/
 *.log
 .DS_Store
 
+
+.test-results/

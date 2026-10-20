@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { readFileSync, readdirSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -6,65 +7,50 @@ import { PrismaService } from '../src/prisma/prisma.service';
 
 /** Banco descartável: nunca executa seed/reset nem escreve dados no banco de desenvolvimento. */
 export async function testDatabase() {
-  const admin = new PrismaClient();
-  const url = new URL(process.env.DATABASE_URL!);
-  if (!['localhost', '127.0.0.1', '[::1]'].includes(url.hostname)) {
-    throw new Error(
-      'Testes de integração exigem PostgreSQL local; conexão remota recusada',
-    );
+  const configuredUrl = process.env.DATABASE_URL;
+  if (!configuredUrl || process.env.FONSAT_TEST_DATABASE !== '1') {
+    throw new Error('TEST_INFRASTRUCTURE: use o ambiente oficial descartável de compose.test.yml');
   }
-  const name = `fonsat_test_${process.pid}_${Date.now()}`;
-  await admin.$executeRawUnsafe(`CREATE DATABASE "${name}"`);
-  url.pathname = `/${name}`;
-  const prisma = new PrismaService({
-    datasources: { db: { url: url.toString() } },
-  });
+  const databaseUrl = new URL(configuredUrl);
+  if (databaseUrl.hostname !== 'postgres' || databaseUrl.username !== 'fonsat_test_admin' || databaseUrl.pathname !== '/fonsat_test_control') {
+    throw new Error('TEST_INFRASTRUCTURE: alvo fora da allowlist de testes; operação recusada');
+  }
+  const databaseName = `fonsat_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
+  const admin = new PrismaClient({datasources:{db:{url:configuredUrl}}});
+  const isolatedUrl = new URL(configuredUrl);
+  isolatedUrl.pathname = `/${databaseName}`;
+  const prisma = new PrismaService({datasources:{db:{url:isolatedUrl.toString()}}});
+  let created = false;
   try {
-    execFileSync(
-      'docker',
-      [
-        'exec',
-        '-i',
-        'fonsat_postgres',
-        'psql',
-        '-U',
-        url.username,
-        '-d',
-        name,
-        '-v',
-        'ON_ERROR_STOP=1',
-      ],
-      {
-        input: readdirSync(resolve('prisma/migrations'), {
-          withFileTypes: true,
-        })
-          .filter((entry) => entry.isDirectory())
-          .map((entry) => entry.name)
-          .sort()
-          .map((name) =>
-            readFileSync(
-              resolve('prisma/migrations', name, 'migration.sql'),
-              'utf8',
-            ),
-          )
-          .join('\n'),
-        stdio: ['pipe', 'pipe', 'pipe'],
-      },
-    );
+    await admin.$connect();
+    await admin.$executeRawUnsafe(`CREATE DATABASE "${databaseName}"`);
+    created = true;
+    const migrationSql = readdirSync(resolve('prisma/migrations'), {withFileTypes:true})
+      .filter(entry=>entry.isDirectory()).map(entry=>entry.name).sort()
+      .map(migration=>readFileSync(resolve('prisma/migrations',migration,'migration.sql'),'utf8')).join('\n');
+    execFileSync('psql', ['--no-psqlrc','--host',databaseUrl.hostname,'--port',databaseUrl.port||'5432','--username',decodeURIComponent(databaseUrl.username),'--dbname',databaseName,'--set','ON_ERROR_STOP=1'], {
+      input:migrationSql,
+      env:{...process.env,PGPASSWORD:decodeURIComponent(databaseUrl.password)},
+      stdio:['pipe','pipe','pipe'],
+    });
     await prisma.$connect();
   } catch (error) {
     await prisma.$disconnect();
-    await admin.$executeRawUnsafe(`DROP DATABASE "${name}" WITH (FORCE)`);
+    if(created) await admin.$executeRawUnsafe(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
     await admin.$disconnect();
-    throw error;
+    throw new Error(`TEST_INFRASTRUCTURE: criação/migrations do banco descartável falharam: ${error instanceof Error ? error.message : 'erro desconhecido'}`);
   }
+  let closed = false;
   return {
     prisma,
-    url: url.toString(),
+    url:isolatedUrl.toString(),
+    name:databaseName,
     async close() {
+      if(closed) return;
+      closed = true;
       await prisma.$disconnect();
-      await admin.$executeRawUnsafe(`DROP DATABASE "${name}" WITH (FORCE)`);
-      await admin.$disconnect();
+      try { await admin.$executeRawUnsafe(`DROP DATABASE "${databaseName}" WITH (FORCE)`); }
+      finally { await admin.$disconnect(); }
     },
   };
 }

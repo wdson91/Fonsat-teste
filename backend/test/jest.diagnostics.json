@@ -1,0 +1,8 @@
+{
+  "rootDir": "..",
+  "testMatch": ["<rootDir>/test/diagnostics/**/*.diagnostic.ts"],
+  "transform": {"^.+\\.ts$": "ts-jest"},
+  "testEnvironment": "node",
+  "moduleFileExtensions": ["ts", "js", "json"],
+  "passWithNoTests": true
+}

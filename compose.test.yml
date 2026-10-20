@@ -1,0 +1,40 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fonsat_test_admin
+      POSTGRES_PASSWORD: disposable_test_password
+      POSTGRES_DB: fonsat_test_control
+    volumes:
+      - test_database:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fonsat_test_admin -d fonsat_test_control"]
+      interval: 1s
+      timeout: 3s
+      retries: 40
+  checks:
+    build:
+      context: .
+      dockerfile: tests/Dockerfile
+    init: true
+    shm_size: 1gb
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://fonsat_test_admin:disposable_test_password@postgres:5432/fonsat_test_control?schema=public
+      FONSAT_TEST_DATABASE: "1"
+      TEST_GROUPS: ${TEST_GROUPS:-all}
+      CI: "1"
+      NEXT_TELEMETRY_DISABLED: "1"
+      NEXT_PUBLIC_API_URL: http://checks:3101
+      QA_API_HOST: checks
+      QA_API_PORT: "3101"
+      QA_FRONTEND_URL: http://checks:3100
+      QA_FIXTURES_PATH: /evidence/fixtures.json
+      PLAYWRIGHT_BROWSERS_PATH: /opt/playwright
+    volumes:
+      - ${TEST_EVIDENCE_DIR:?defined by scripts/test.sh}:/evidence
+    command: ["node", "scripts/test-runner.mjs"]
+volumes:
+  test_database:
