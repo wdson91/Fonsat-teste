@@ -30,7 +30,7 @@ services:
       NEXT_PUBLIC_API_URL: http://checks:3101
       QA_API_HOST: checks
       QA_API_PORT: "3101"
-      QA_FRONTEND_URL: http://checks:3100
+      QA_FRONTEND_URL: http://localhost:3100
       QA_FIXTURES_PATH: /evidence/fixtures.json
       PLAYWRIGHT_BROWSERS_PATH: /opt/playwright
     volumes:

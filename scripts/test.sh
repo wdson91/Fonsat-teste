@@ -7,6 +7,8 @@ project="fonsat-tests-$run_id"
 export TEST_EVIDENCE_DIR="$root/.test-results/$run_id"
 export TEST_GROUPS="${1:-all}"
 mkdir -p "$TEST_EVIDENCE_DIR"
+compose_process=""
+compose_active=0
 compose() { docker compose --project-name "$project" --file compose.test.yml "$@"; }
 cleanup() {
   result=$?
@@ -17,6 +19,10 @@ cleanup() {
   else
     printf 'Cleanup failed for %s\n' "$project" >&2
     result=1
+  fi
+  if [ "$compose_active" -eq 1 ]; then
+    kill -TERM "$compose_process" 2>/dev/null || true
+    wait "$compose_process" 2>/dev/null || true
   fi
   printf 'Evidence: %s\n' "$TEST_EVIDENCE_DIR"
   exit "$result"
@@ -30,9 +36,18 @@ if ! compose build > "$TEST_EVIDENCE_DIR/build.log" 2>&1; then
   exit 1
 fi
 set +e
-compose up --abort-on-container-exit --exit-code-from checks > "$TEST_EVIDENCE_DIR/run.log" 2>&1
+compose up --abort-on-container-exit --exit-code-from checks > "$TEST_EVIDENCE_DIR/run.log" 2>&1 &
+compose_process=$!
+compose_active=1
+wait "$compose_process"
 result=$?
+compose_active=0
 set -e
 printf 'Detailed container logs: %s/run.log\n' "$TEST_EVIDENCE_DIR"
-if [ -f "$TEST_EVIDENCE_DIR/summary.txt" ]; then cat "$TEST_EVIDENCE_DIR/summary.txt"; fi
+if [ -f "$TEST_EVIDENCE_DIR/summary.txt" ]; then
+  cat "$TEST_EVIDENCE_DIR/summary.txt"
+else
+  printf 'INFRASTRUCTURE: runner summary unavailable; see run.log\n' >&2
+  result=1
+fi
 exit "$result"

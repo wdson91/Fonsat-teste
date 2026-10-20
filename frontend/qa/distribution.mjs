@@ -23,6 +23,19 @@ const page = await context.newPage();
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 const base = process.env.QA_FRONTEND_URL ?? 'http://localhost:3100';
+function lisbonCalendarDay(instant) {
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-GB', {
+      timeZone: 'Europe/Lisbon',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    })
+      .formatToParts(new Date(instant))
+      .map((part) => [part.type, part.value]),
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
 const shift = (day, n) => {
   const d = new Date(day + 'T12:00:00Z');
   d.setUTCDate(d.getUTCDate() + n);
@@ -51,6 +64,20 @@ try {
   const worker = workers.find((w) => w.id === fixture.planningWorkerId);
   assert.ok(worker.defaultTrade);
   await page.goto(base);
+  const originState = await page.evaluate(() => ({
+    secureContext: window.isSecureContext,
+    randomUUID: typeof crypto.randomUUID,
+  }));
+  assert.equal(
+    originState.secureContext,
+    true,
+    'TEST_INFRASTRUCTURE: browser origin must be secure (HTTPS/localhost or explicit disposable test origins)',
+  );
+  assert.equal(
+    originState.randomUUID,
+    'function',
+    'TEST_INFRASTRUCTURE: native crypto.randomUUID is unavailable',
+  );
   await page
     .getByLabel('Persona de demonstração', { exact: true })
     .selectOption(String(fixture.foremanId));
@@ -158,7 +185,9 @@ try {
   await page.getByText(/dia\(s\) copiado\(s\);/).waitFor();
   let allocations = await api('/allocations');
   let target = allocations.filter(
-    (a) => a.workerId === worker.id && a.startDate >= shift(monday, 7),
+    (a) =>
+      a.workerId === worker.id &&
+      lisbonCalendarDay(a.startDate) >= shift(monday, 7),
   );
   assert.equal(target.length, 3);
   assert.equal(

@@ -44,7 +44,7 @@ function start(command, argumentsList, cwd, logName, extraEnvironment = {}) {
   return child;
 }
 async function stop(child) {
-  if (!child || child.exitCode !== null) return;
+  if (!child || child.exitCode !== null || child.signalCode !== null) return;
   await new Promise((resolve) => {
     child.once('close', resolve);
     child.kill('SIGTERM');
@@ -113,7 +113,7 @@ async function execute(
     ...details,
   };
   results.push(result);
-  console.log(`END ${name}: ${classification}`);
+  console.log(`END ${name}: ${result.classification}`);
   if (code !== 0) console.log(output.split('\n').slice(-35).join('\n'));
   return result;
 }
@@ -144,6 +144,12 @@ async function browserGroup(name, script) {
       { QA_FIXTURES_PATH: fixturePath },
     );
     await ready('http://checks:3101/users/personas', apiServer);
+    const fixtureDeadline = Date.now() + 15000;
+    while (!existsSync(fixturePath)) {
+      if (apiServer.exitCode !== null || Date.now() > fixtureDeadline)
+        throw new Error('TEST_INFRASTRUCTURE: fixture preparation failed');
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    }
     await execute(name, 'node', [script], frontend, {
       QA_FIXTURES_PATH: fixturePath,
     });
@@ -257,22 +263,27 @@ try {
     backend,
   );
   const browserDiagnostics = join(frontend, 'qa/diagnostics');
-  if (
-    !existsSync(browserDiagnostics) ||
-    !readdirSync(browserDiagnostics).some((file) =>
-      file.endsWith('.diagnostic.mjs'),
-    )
-  )
+  const browserDiagnosticFiles = existsSync(browserDiagnostics)
+    ? readdirSync(browserDiagnostics).filter((file) =>
+        file.endsWith('.diagnostic.mjs'),
+      )
+    : [];
+  if (!browserDiagnosticFiles.length)
     results.push({
       name: 'diagnostics-browser',
       exitCode: 0,
       classification: 'no_cases',
       tests: 0,
     });
-  if (existsSync(browserDiagnostics))
-    for (const script of readdirSync(browserDiagnostics).filter((file) =>
-      file.endsWith('.diagnostic.mjs'),
-    ))
+  else if (process.env.TEST_GROUPS === 'baseline')
+    results.push({
+      name: 'diagnostics-browser',
+      exitCode: 0,
+      classification: 'not_requested',
+      tests: browserDiagnosticFiles.length,
+    });
+  else
+    for (const script of browserDiagnosticFiles)
       await browserGroup(
         `diagnostic-${script.replace('.diagnostic.mjs', '')}`,
         `qa/diagnostics/${script}`,
