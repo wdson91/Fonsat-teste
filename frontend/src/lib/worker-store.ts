@@ -1,10 +1,12 @@
 import type {
   AttendanceEvent,
+  AttendanceRecord,
   NamedItem,
   RecordStatus,
   Site,
 } from './contracts.ts';
-import { lisbonTimestamp } from './lisbon.ts';
+import { lisbonDay, lisbonTime, lisbonTimestamp } from './lisbon.ts';
+import { currentRecords } from './records.ts';
 
 export interface DraftTurn {
   id: string;
@@ -217,4 +219,45 @@ export function compatibleAllocation(
   } catch {
     return false;
   }
+}
+
+/** Atualiza só os confirmados; rascunhos e payloads de reenvio continuam locais. */
+export function reconcileConfirmedTurns(
+  rows: DraftTurn[],
+  records: AttendanceRecord[],
+): DraftTurn[] {
+  const pending = rows.filter((row) => row.status !== 'sent');
+  const confirmed: DraftTurn[] = [];
+  for (const record of currentRecords(records)) {
+    const shifts = new Map<string, AttendanceEvent[]>();
+    for (const event of record.events)
+      shifts.set(event.shiftId, [...(shifts.get(event.shiftId) ?? []), event]);
+    for (const [shiftId, events] of shifts) {
+      // Uma resposta perdida ainda precisa do replay original para confirmação.
+      if (pending.some((row) => row.id === shiftId)) continue;
+      const entry = events.find((event) => event.kind === 'in');
+      const exit = events.find((event) => event.kind === 'out');
+      if (!entry || !exit) continue;
+      const saved = rows.find((row) => row.status === 'sent' && row.id === shiftId);
+      confirmed.push({
+        id: shiftId,
+        day: lisbonDay(new Date(record.workDate)),
+        siteId: record.siteId,
+        tradeId: record.tradeId,
+        entry: lisbonTime(entry.occurredAt),
+        exit: lisbonTime(exit.occurredAt),
+        entryId: saved?.entryId ?? entry.id,
+        exitId: saved?.exitId ?? exit.id,
+        payload: saved?.payload ?? null,
+        status: 'sent',
+        serverStatus: record.status,
+      });
+    }
+  }
+  const positions = new Map(rows.map((row, index) => [row.id, index]));
+  return [...pending, ...confirmed].sort(
+    (first, second) =>
+      (positions.get(first.id) ?? rows.length) -
+      (positions.get(second.id) ?? rows.length),
+  );
 }

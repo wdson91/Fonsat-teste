@@ -196,8 +196,8 @@ async function main() {
           clientId: clientTeixeira.id,
           tradeId: tradePedreiro.id,
           hourlyRate: '15.00',
-          validFrom: new Date('2026-09-01T00:00:00.000Z'),
-          validTo: new Date('2026-09-15T23:59:59.999Z'),
+          validFrom: new Date('2026-08-31T23:00:00.000Z'),
+          validTo: new Date('2026-09-15T22:59:59.999Z'),
         },
       }),
       prisma.clientRate.create({
@@ -206,7 +206,7 @@ async function main() {
           clientId: clientTeixeira.id,
           tradeId: tradePedreiro.id,
           hourlyRate: '18.00',
-          validFrom: new Date('2026-09-16T00:00:00.000Z'),
+          validFrom: new Date('2026-09-15T23:00:00.000Z'),
           validTo: null,
         },
       }),
@@ -216,7 +216,7 @@ async function main() {
           clientId: clientTeixeira.id,
           tradeId: tradeServente.id,
           hourlyRate: '12.00',
-          validFrom: new Date('2026-09-01T00:00:00.000Z'),
+          validFrom: new Date('2026-08-31T23:00:00.000Z'),
           validTo: null,
         },
       }),
@@ -226,7 +226,7 @@ async function main() {
           clientId: clientTeixeira.id,
           tradeId: tradeEletricista.id,
           hourlyRate: '20.00',
-          validFrom: new Date('2026-09-01T00:00:00.000Z'),
+          validFrom: new Date('2026-08-31T23:00:00.000Z'),
           validTo: null,
         },
       }),
@@ -236,7 +236,7 @@ async function main() {
           clientId: clientDouro.id,
           tradeId: tradePedreiro.id,
           hourlyRate: '16.50',
-          validFrom: new Date('2026-09-01T00:00:00.000Z'),
+          validFrom: new Date('2026-08-31T23:00:00.000Z'),
           validTo: null,
         },
       }),
@@ -246,11 +246,22 @@ async function main() {
           clientId: clientDouro.id,
           tradeId: tradeServente.id,
           hourlyRate: '12.50',
-          validFrom: new Date('2026-09-01T00:00:00.000Z'),
+          validFrom: new Date('2026-08-31T23:00:00.000Z'),
           validTo: null,
         },
       }),
     ]);
+
+  const rateTeixeiraCanalizador = await prisma.clientRate.create({
+    data: {
+      companyId: company1.id,
+      clientId: clientTeixeira.id,
+      tradeId: tradeCanalizador.id,
+      hourlyRate: '22.00',
+      validFrom: new Date('2026-08-31T23:00:00.000Z'),
+      validTo: null,
+    },
+  });
 
   // -------------------------------------------------------------------------
   // SETEMBRO/2026: Registos Faturados (ISSUED) + Correção Pós-Fatura (100% INSERT-only)
@@ -573,7 +584,7 @@ async function main() {
   });
 
   // -------------------------------------------------------------------------
-  // OUTUBRO/2026: Registos antes de faturar (incluindo substituição e PENDING_RATE)
+  // OUTUBRO/2026: Registos antes de faturar (incluindo substituição e trabalho urgente já precificado)
   // -------------------------------------------------------------------------
   const recOct05Original = await prisma.workRecord.create({
     data: {
@@ -652,7 +663,7 @@ async function main() {
     }),
   ]);
 
-  // Registo em PENDING_RATE: Rui fez trabalho urgente de Canalizador em 06/10/2026 (sem preço cadastrado ainda)
+  // Trabalho urgente de Canalizador em 06/10/2026, com tarifa histórica cadastrada
   await prisma.workRecord.create({
     data: {
       companyId: company1.id,
@@ -679,10 +690,10 @@ async function main() {
         },
       ],
       totalMinutes: 240,
-      clientRateId: null,
-      hourlyRateSnapshot: null,
-      totalAmount: null,
-      status: WorkRecordStatus.PENDING_RATE,
+      clientRateId: rateTeixeiraCanalizador.id,
+      hourlyRateSnapshot: '22.00',
+      totalAmount: '88.00',
+      status: WorkRecordStatus.ACTIVE,
       createdById: workerRui.id,
     },
   });
@@ -801,7 +812,7 @@ async function main() {
       clientId: clientAlgarve.id,
       tradeId: tradeCarpinteiro.id,
       hourlyRate: '19.00',
-      validFrom: new Date('2026-09-01T00:00:00.000Z'),
+      validFrom: new Date('2026-08-31T23:00:00.000Z'),
       validTo: null,
     },
   });

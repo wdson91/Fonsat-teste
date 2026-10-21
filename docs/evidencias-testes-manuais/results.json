@@ -1,0 +1,62 @@
+{
+  "results": [
+    {
+      "step": 1,
+      "status": "passed",
+      "actual": "Prévia outubro 232 = 144 + 88"
+    },
+    {
+      "step": 2,
+      "status": "passed",
+      "actual": "480 minutos; prévia 376"
+    },
+    {
+      "step": 3,
+      "status": "passed",
+      "actual": "420 minutos, grelha 15:00, prévia 358 e histórico"
+    },
+    {
+      "step": 4,
+      "status": "passed",
+      "actual": "Fatura #4 emitida 358; nova prévia vazia"
+    },
+    {
+      "step": 5,
+      "status": "passed",
+      "actual": "Crédito #5 de 18, origem #4, líquido 340"
+    },
+    {
+      "step": 6,
+      "status": "passed",
+      "actual": "Débito #6 de 9, origem #4, líquido 349"
+    },
+    {
+      "step": 7,
+      "status": "passed",
+      "actual": "Ricardo sem identidade do trabalhador/admin; Sofia recebe 404 para Teixeira"
+    },
+    {
+      "step": 8,
+      "status": "passed",
+      "actual": "Atrasado setembro: 60 minutos a 15/h; prévia novembro 15"
+    },
+    {
+      "step": 9,
+      "status": "passed",
+      "actual": "Pendente sem cobrança; exceção confirmada a 16,50; Douro 148,50"
+    },
+    {
+      "step": 10,
+      "status": "passed",
+      "actual": "Antes de faturar: Boavista 18, Douro 132, Teixeira novembro 33; sem nota"
+    },
+    {
+      "step": 11,
+      "status": "passed",
+      "actual": "D+1: 2026-10-21 recusado, 2026-10-22 aceite; original 358/líquido349 e atrasado15 preservados"
+    }
+  ],
+  "invoiceId": 4,
+  "errors": [],
+  "browserVersion": "151.0.7922.34"
+}

@@ -1,60 +1,38 @@
-# DECISOES.md — Assiduidade e Faturação
+# Decisões — Assiduidade e Faturação
 
-Este documento regista as decisões de arquitetura e de domínio tomadas perante as ambiguidades do enunciado, privilegiando **exatidão financeira ao cêntimo daqui a dois anos**, **imutabilidade de auditoria** e **isolamento multi-tenant**.
+Prioridades: simplicidade, valores explicáveis ao cêntimo, histórico preservado e isolamento entre empresas.
 
----
+## Identidade, planeamento e registo
 
-## 1. Modelo Consolidado de `WorkRecord`, Arredondamentos e Rastreabilidade
+| Ambiguidade | Decisão | Justificação |
+| --- | --- | --- |
+| Como identificar pessoas sem login real? | `x-user-id` seleciona a persona; o guard resolve empresa e um dos quatro papéis no banco. O cliente comercial está ligado por `User.clientId`. | Permissões independem da interface e dos nomes. Sem autenticação real. |
+| O planeamento define horários e admite vários encarregados? | Cada obra tem um encarregado responsável. A distribuição define obra e ofício; `Allocation.tradeId` é obrigatório, com sugestão do ofício habitual. Não define horas planeadas. | Mantém o planeamento simples; a cobrança depende do trabalho efetivamente registado, não de uma previsão de horas. |
+| Receber entradas/saídas isoladas ou turnos completos? | Só enviar pares completos, também validados no backend. Incompletos ficam em `localStorage`, por empresa/utilizador, na chave `fonsat:worker:v1:companyId:personaId`. Envio manual, sem primeiro acesso offline por PWA. | Evita reconciliar marcações incompletas no servidor. Conserva rascunhos offline na interface já carregada. |
+| Como tratar reenvios e trabalho diferente da alocação? | UUID de evento/turno estáveis: replay idêntico é ignorado; ID igual com conteúdo diferente devolve 409. Divergências ficam em `PENDING_CORRECTION`, sem valor, para revisão. | Falhas de rede não duplicam nem sobrescrevem trabalho; imprevistos ficam registados sem cobrança prematura. |
 
-- **Registo Consolidado por Trabalhador, Dia, Obra e Ofício (`WorkRecord`)**:
-  - A grelha no telemóvel do trabalhador mantém marcações incompletas no dispositivo (`localStorage`) e **envia somente turnos completos (com entrada `in` e saída `out`)**, também validados pelo backend.
-  - No `AttendanceService`, antes de salvar no banco, os pares `in`/`out` são agrupados por `(workDate, siteId, tradeId)`, os minutos de todos os turnos são somados e **o total de minutos (`totalMinutes: Int`, obrigatório) é arredondado (`Math.round`) antes de ser persistido**.
-  - Os eventos originais (`eventsJson`) permanecem gravados no `WorkRecord` e a tabela `AttendanceEventDedup` garante idempotência caso o telemóvel reenvie o mesmo pacote.
-  - Divergência de obra/ofício ou alocação vira `PENDING_CORRECTION`, sem dinheiro; ID igual/conteúdo diferente retorna 409, replay idêntico é ignorado.
-- **Precisão Monetária (`DECIMAL(10, 2)`) e Snapshot Histórico**:
-  - Todos os preços horários e montantes utilizam `DECIMAL(10, 2)` no PostgreSQL.
-  - A tarifa aplicável é determinada pela **data/hora em que o trabalho ocorreu (`occurredAt` / `workDate`)**, congelando `clientRateId`, `hourlyRateSnapshot` e `totalAmount = round((totalMinutes / 60) * hourlyRateSnapshot, 2)`.
-  - Cada `InvoiceLine` congela obra, ofício, tarifa horária, vigência (`validFrom`..`validTo`), minutos e subtotal, ligada aos `WorkRecord` via `InvoiceLineWorkRecord`.
+## Tempo, tarifas e valores
 
----
+| Ambiguidade | Decisão | Justificação |
+| --- | --- | --- |
+| Como consolidar durações e definir o dia? | `WorkRecord` por trabalhador/dia/obra/ofício. Preservar eventos, somar durações e arredondar o total em minutos para inteiro, sem truncar os instantes. Calendário em `Europe/Lisbon`, incluindo mudanças de hora. Não definir limite máximo diário de horas de trabalho; validar horários e sobreposições. | Mantém o cálculo rastreável e evita inventar um teto ou adicionais de horas extra. O fuso do dispositivo não muda competências. |
+| Qual tarifa usar quando o preço muda? | Tarifa por cliente/ofício, com vigências sem sobreposição. A primeira pode ser histórica; as seguintes começam em D+1 em Lisboa ou depois, sempre após a última vigência programada. Fechar a anterior aberta no milissegundo precedente. | Preserva o preço acordado quando o trabalho ocorreu e impede reprecificação histórica. A primeira tarifa pode resolver horas ainda sem preço. |
+| Preço de venda e remuneração são distintos? | Usar uma única tarifa horária para valorizar o trabalho e cobrar ao cliente, sem modelar remuneração separada ou folha de pagamento. Guardar referência da tarifa, preço e montante no registo. | Simplificação; não calcula nem paga salários. |
+| Quando arredondar e o que fazer sem preço? | Montante por registo: `round((minutos / 60) × tarifa, 2)`, com Decimal; faturas somam montantes já arredondados. Sem tarifa: `PENDING_RATE`, minutos preservados e montante nulo. | Evita desvios monetários e cobrança a zero por falta de cadastro. Pendências aguardam resolução sem bloquear a faturação dos registos resolvidos. |
 
-## 2. Vigência de Preços, Mudanças a Meio do Mês e `PENDING_RATE`
+## Faturação, correções e isolamento
 
-- **Vigências Sem Sobreposição e Sem Retroatividade**:
-  - Tarifas (`ClientRate`) são negociadas por `(clientId, tradeId)` com intervalo `[validFrom, validTo]`.
-  - Ao registar um novo preço com `validFrom`, o sistema encerra automaticamente a tarifa anterior aberta (`validTo = novo.validFrom - 1ms`).
-  - Nenhuma nova vigência pode sobrepor-se a outra nem alterar retroativamente o preço de horas já trabalhadas e precificadas (`ACTIVE`).
-  - Depois da primeira tarifa, novos inícios só a partir de amanhã em Europe/Lisbon e depois da última vigência programada; a primeira pode ser histórica para resolver horas sem preço.
-- **Trabalhador Nunca Bloqueado por Falta de Preço Cadastrado (`PENDING_RATE`)**:
-  - Se não existir tarifa vigente na `workDate` para aquele `(clientId, tradeId)`, o `WorkRecord` é salvo com `totalMinutes` obrigatório e `status = PENDING_RATE` (`totalAmount = null`), ficando pendente para resolução do Encarregado/Administrativo sem entrar na cobrança até ser resolvido.
+| Ambiguidade | Decisão | Justificação |
+| --- | --- | --- |
+| Uma única fatura por cliente/mês? | Permitir faturas complementares da mesma competência, apenas com trabalho ainda não faturado, incluindo atrasados. Prévia sem escrita, token contra desatualização, transações e locks na emissão. | No negócio é comum existir mais de uma fatura. Os vínculos trabalho→linha→fatura evitam dupla cobrança no fluxo da API e identificam a origem de cada ajuste. |
+| Como corrigir antes e depois da emissão? | Antes: transação marca a versão anterior `SUPERSEDED` e cria outra com motivo/autor. Depois: original intacto, nova versão e crédito/débito DRAFT pela diferença face ao original e ajustes emitidos. Zero não gera nota; rascunho bloqueia nova correção do mesmo trabalho. Mudar cliente após emissão é bloqueado. | Corrige sem apagar o passado nem cobrar novamente o valor integral. A nota fica ligada à fatura de origem; retificação entre clientes está fora deste fluxo. |
+| Alterar cadastros pode mudar documentos anteriores? | Linhas conservam nomes da obra/ofício, preço, vigência, minutos e subtotal, ligadas aos registos. Triggers protegem o histórico. A grelha mostra os confirmados atuais sem sobrescrever rascunhos locais. | Explica documentos antigos e mostra correções, mantendo originais auditáveis. |
+| Como impedir acesso entre empresas? | Company é a empresa isolada; Client pertence a essa empresa. Serviços aplicam papel/âmbito e `withTenant` define role/contexto local à transação para RLS no PostgreSQL. | RLS isola empresas; não escolhe a fatura de um ajuste. Essa origem é determinada pelos vínculos financeiros. O bootstrap privilegiado é limitado à demonstração. |
 
----
+## Entrega e limites
 
-## 3. Imutabilidade e Histórico de Correções Garantidos por Triggers no PostgreSQL
+Next.js, NestJS e PostgreSQL/Prisma; controllers recebem pedidos e services concentram regras, privilegiando código legível e consistência. Testes Docker usam bancos descartáveis, separados do demo.
 
-- **Proteção no Banco (`BEFORE UPDATE OR DELETE`)**:
-  - Todas as FKs usam `ON DELETE RESTRICT ON UPDATE RESTRICT`.
-  - `AttendanceEventDedup`, `InvoiceLine` e `InvoiceLineWorkRecord` bloqueiam **100% de `UPDATE` e `DELETE`** (`forbid_update_and_delete()`).
-  - Em `WorkRecord`, o trigger `enforce_work_record_immutability()` proíbe `DELETE` e permite no `UPDATE` **exclusivamente a transição válida do registo anterior para `SUPERSEDED`** (desde que ainda não esteja `SUPERSEDED` nem faturado em fatura `ISSUED`), preservando horários, minutos, tarifas e valores antigos intocados.
-  - O índice único em `replacesRecordId` (`@unique`) impede duas substituições diretas do mesmo registo.
-- **Correções ANTES da Emissão da Fatura**:
-  - Em uma mesma transação (`prisma.$transaction`), marca a versão anterior como `SUPERSEDED` e cria uma nova versão de `WorkRecord` ligada por `replacesRecordId`, registando `correctionReason` e `createdById`.
-- **Correções DEPOIS da Emissão da Fatura (`ISSUED`)**:
-  - Preserva original; nova versão aponta `correctsInvoicedRecordId`. Nota CREDIT_NOTE/DEBIT_NOTE DRAFT (`parentInvoiceId`) cobra só diferença contra original + ajustes ISSUED; zero não gera documento. DRAFT pendente bloqueia nova correção; trocar cliente após emissão exige retificação comercial separada.
-  - Fatura regular inclui todo trabalho ACTIVE ainda não emitido até o fim da competência, mesmo antigo; pendências não bloqueiam resolvidos. Prévia sem escrita/token de conteúdo; emissão atômica soma montantes já arredondados e exclui registros de correção.
+A fase 5 continua pendente: Compose local com frontend, API, banco, migrações e inicialização segura do seed, preservando dados entre arranques. Fora do âmbito: deploy de produção, PDFs/emails, CI/CD e CRUDs acessórios do cadastro inicial.
 
----
-
-## 4. Multi-Tenancy com Row-Level Security (RLS) e Enquadramento Legal (AT / SAF-T / IVA)
-
-- **Dupla Camada de Isolamento Multi-Tenant (Aplicação + PostgreSQL RLS)**:
-  - Sem login real, `x-user-id` simula persona; um único AccessGuard resolve os 4 papéis. Serviços aplicam escopo; bootstrap privilegiado é limite da demonstração.
-  - No PostgreSQL, todas as tabelas têm **`ENABLE ROW LEVEL SECURITY` e `FORCE ROW LEVEL SECURITY`** com políticas (`CREATE POLICY`) baseadas na function `current_tenant_id()` (`current_setting('app.current_company_id')`) e na role `app_tenant_user` (`NOBYPASSRLS`), acionadas via `PrismaService.withTenant(companyId, ...)`.
-- **Como encaixaria Certificação AT, SAF-T, IVA e Retenções em Produção**:
-  - Como faturas `ISSUED` são imutáveis por trigger e correções pós-fatura usam documentos retificativos (`CREDIT_NOTE` / `DEBIT_NOTE` com `parentInvoiceId`), bastaria adicionar em `Invoice`/`InvoiceLine` taxa/isenção de IVA (ex: autoliquidação na construção civil), retenção na fonte, série/numeração sequencial, `ATCUD` e assinatura RSA encadeada (`hash`, `previousInvoiceHash`) no momento da emissão para exportação SAF-T (PT).
-
----
-
-## 5. O Que Ficou Fora de Âmbito
-
-- Autenticação real (JWT/OAuth), geração de PDFs/emails, CI/CD e CRUDs acessórios de cadastro inicial (populados via `seed.ts`).
+Em produção, integraríamos um serviço de faturação certificado, com configuração fiscal própria por empresa (`Company`). Cada empresa emitiria em seu nome e NIF, com séries próprias e um ATCUD por documento. Guardaríamos as referências fiscais nas faturas e notas, mantendo os vínculos aos trabalhos e o isolamento entre empresas.
