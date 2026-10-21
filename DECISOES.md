@@ -33,6 +33,6 @@ Prioridades: simplicidade, valores explicáveis ao cêntimo, histórico preserva
 
 Next.js, NestJS e PostgreSQL/Prisma; controllers recebem pedidos e services concentram regras, privilegiando código legível e consistência. Testes Docker usam bancos descartáveis, separados do demo.
 
-A fase 5 continua pendente: Compose local com frontend, API, banco, migrações e inicialização segura do seed, preservando dados entre arranques. Fora do âmbito: deploy de produção, PDFs/emails, CI/CD e CRUDs acessórios do cadastro inicial.
+A fase 5 está concluída: `docker compose up --build` inicia frontend, API e banco, aplica migrações e inicializa o seed com segurança, preservando dados entre arranques. `sh scripts/test.sh` executa os testes num ambiente Docker isolado. Fora do âmbito: deploy de produção, PDFs/emails, CI/CD e CRUDs acessórios do cadastro inicial.
 
 Em produção, integraríamos um serviço de faturação certificado, com configuração fiscal própria por empresa (`Company`). Cada empresa emitiria em seu nome e NIF, com séries próprias e um ATCUD por documento. Guardaríamos as referências fiscais nas faturas e notas, mantendo os vínculos aos trabalhos e o isolamento entre empresas.
