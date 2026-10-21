@@ -18,7 +18,7 @@ npx prisma migrate deploy
 npm run start:dev
 ```
 
-Para a carga inicial de demonstração: `npm run prisma:seed`. Não repetir o seed num banco com dados a preservar.
+Para a carga inicial de demonstração: `npm run prisma:seed`. O seed padrão inclui tarifas históricas para as combinações usadas e não deixa registos em `PENDING_RATE`. O comando apaga e recria os dados de demonstração; não o repetir num banco com dados a preservar.
 
 ## Verificar
 
