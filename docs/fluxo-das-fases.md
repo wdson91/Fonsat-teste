@@ -26,3 +26,7 @@ As branches 4.1–4.5 possuem implementação e relatórios locais. A integraç�
 
 
 Depois da 4.5, os PRs de testes seguem `fase-3.1/base-testes` → `fase-3.2/isolamento-integridade` → `fase-3.3/regras-financeiras` → `fase-3.4/fluxos-integrados`. A próxima parte da anterior. O ambiente Docker de testes não antecipa a fase 5 de produção. A extensão experimental de ajustes entre clientes não entra nesta cadeia.
+
+## Entrega local da fase 5
+
+A branch `fase-5/execucao-docker` parte de main `c3a1a01`, já com fases 4 e 3 integradas. Implementa Compose local completo e pode ser integrada **antes de ajustes**, sem depender das correções de UI, seed ou documentos dessa branch. Relatório: [fase 5](relatorio-fase-5.md). As referências anteriores a etapas futuras registam a sequência histórica; deploy de produção não faz parte desta entrega. Não foi executado merge, push ou PR nesta fase.
