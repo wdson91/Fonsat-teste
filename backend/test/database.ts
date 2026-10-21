@@ -9,48 +9,99 @@ import { PrismaService } from '../src/prisma/prisma.service';
 export async function testDatabase() {
   const configuredUrl = process.env.DATABASE_URL;
   if (!configuredUrl || process.env.FONSAT_TEST_DATABASE !== '1') {
-    throw new Error('TEST_INFRASTRUCTURE: use o ambiente oficial descartável de compose.test.yml');
+    throw new Error(
+      'TEST_INFRASTRUCTURE: use o ambiente oficial descartável de compose.test.yml',
+    );
   }
   const databaseUrl = new URL(configuredUrl);
-  if (databaseUrl.hostname !== 'postgres' || databaseUrl.username !== 'fonsat_test_admin' || databaseUrl.pathname !== '/fonsat_test_control') {
-    throw new Error('TEST_INFRASTRUCTURE: alvo fora da allowlist de testes; operação recusada');
+  if (
+    databaseUrl.hostname !== 'postgres' ||
+    databaseUrl.username !== 'fonsat_test_admin' ||
+    databaseUrl.pathname !== '/fonsat_test_control'
+  ) {
+    throw new Error(
+      'TEST_INFRASTRUCTURE: alvo fora da allowlist de testes; operação recusada',
+    );
   }
   const databaseName = `fonsat_test_${process.pid}_${randomUUID().replaceAll('-', '')}`;
-  const admin = new PrismaClient({datasources:{db:{url:configuredUrl}}});
+  const admin = new PrismaClient({
+    datasources: { db: { url: configuredUrl } },
+  });
   const isolatedUrl = new URL(configuredUrl);
   isolatedUrl.pathname = `/${databaseName}`;
-  const prisma = new PrismaService({datasources:{db:{url:isolatedUrl.toString()}}});
+  const prisma = new PrismaService({
+    datasources: { db: { url: isolatedUrl.toString() } },
+  });
   let created = false;
   try {
     await admin.$connect();
     await admin.$executeRawUnsafe(`CREATE DATABASE "${databaseName}"`);
     created = true;
-    const migrationSql = readdirSync(resolve('prisma/migrations'), {withFileTypes:true})
-      .filter(entry=>entry.isDirectory()).map(entry=>entry.name).sort()
-      .map(migration=>readFileSync(resolve('prisma/migrations',migration,'migration.sql'),'utf8')).join('\n');
-    execFileSync('psql', ['--no-psqlrc','--host',databaseUrl.hostname,'--port',databaseUrl.port||'5432','--username',decodeURIComponent(databaseUrl.username),'--dbname',databaseName,'--set','ON_ERROR_STOP=1'], {
-      input:migrationSql,
-      env:{...process.env,PGPASSWORD:decodeURIComponent(databaseUrl.password)},
-      stdio:['pipe','pipe','pipe'],
-    });
+    const migrationSql = readdirSync(resolve('prisma/migrations'), {
+      withFileTypes: true,
+    })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort()
+      .map((migration) =>
+        readFileSync(
+          resolve('prisma/migrations', migration, 'migration.sql'),
+          'utf8',
+        ),
+      )
+      .join('\n');
+    execFileSync(
+      'psql',
+      [
+        '--no-psqlrc',
+        '--host',
+        databaseUrl.hostname,
+        '--port',
+        databaseUrl.port || '5432',
+        '--username',
+        decodeURIComponent(databaseUrl.username),
+        '--dbname',
+        databaseName,
+        '--set',
+        'ON_ERROR_STOP=1',
+      ],
+      {
+        input: migrationSql,
+        env: {
+          ...process.env,
+          PGPASSWORD: decodeURIComponent(databaseUrl.password),
+        },
+        stdio: ['pipe', 'pipe', 'pipe'],
+      },
+    );
     await prisma.$connect();
   } catch (error) {
     await prisma.$disconnect();
-    if(created) await admin.$executeRawUnsafe(`DROP DATABASE "${databaseName}" WITH (FORCE)`);
+    if (created)
+      await admin.$executeRawUnsafe(
+        `DROP DATABASE "${databaseName}" WITH (FORCE)`,
+      );
     await admin.$disconnect();
-    throw new Error(`TEST_INFRASTRUCTURE: criação/migrations do banco descartável falharam: ${error instanceof Error ? error.message : 'erro desconhecido'}`);
+    throw new Error(
+      `TEST_INFRASTRUCTURE: criação/migrations do banco descartável falharam: ${error instanceof Error ? error.message : 'erro desconhecido'}`,
+    );
   }
   let closed = false;
   return {
     prisma,
-    url:isolatedUrl.toString(),
-    name:databaseName,
+    url: isolatedUrl.toString(),
+    name: databaseName,
     async close() {
-      if(closed) return;
+      if (closed) return;
       closed = true;
       await prisma.$disconnect();
-      try { await admin.$executeRawUnsafe(`DROP DATABASE "${databaseName}" WITH (FORCE)`); }
-      finally { await admin.$disconnect(); }
+      try {
+        await admin.$executeRawUnsafe(
+          `DROP DATABASE "${databaseName}" WITH (FORCE)`,
+        );
+      } finally {
+        await admin.$disconnect();
+      }
     },
   };
 }
