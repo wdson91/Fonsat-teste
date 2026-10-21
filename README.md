@@ -1,83 +1,126 @@
 # Fonsat — Assiduidade e faturação
 
-Aplicação de demonstração com Next.js, NestJS/Prisma e PostgreSQL. Sem login real: o seletor apresenta personas de duas empresas.
+Aplicação de demonstração para distribuir trabalhadores por obras, registar horas e faturar clientes, com isolamento entre empresas e histórico das correções.
+
+**Stack:** Next.js, TypeScript, Tailwind CSS, NestJS, Prisma e PostgreSQL.
 
 ## Executar
 
-Com Docker e Compose disponíveis, na raiz:
+Requisitos: Docker e Docker Compose.
+
+Na raiz do projeto:
 
 ```sh
 docker compose up --build
 ```
 
-Abrir [frontend](http://localhost:3000). API: [personas](http://localhost:3001/users/personas). O navegador usa localhost:3001; postgres é o DNS privado do banco, não uma URL do navegador. CORS já é permitido pela API de demonstração.
+- Frontend: http://localhost:3000
+- API: http://localhost:3001/users/personas
 
-<<<<<<< HEAD
-Aguardar initialize terminar e backend/frontend ficarem healthy (`docker compose ps -a`). No primeiro arranque: aplicar migrações e carregar seed **apenas se todas as tabelas de negócio estiverem vazias**. Em arranques seguintes, preservar dados. O seed desta base main inclui um exemplo PENDING_RATE; a alteração que o elimina pertence à branch ajustes, independente desta fase.
-=======
-<<<<<<< Updated upstream
-## Verificar
-=======
-Aguardar initialize terminar e backend/frontend ficarem healthy (`docker compose ps -a`). No primeiro arranque: aplicar migrações e carregar seed **apenas se todas as tabelas de negócio estiverem vazias**. Em arranques seguintes, preservar dados. O seed padrão inclui tarifas históricas e não deixa preços pendentes.
->>>>>>> Stashed changes
->>>>>>> ajustes
+Aguardar a inicialização terminar e os serviços ficarem saudáveis:
 
-Papéis no seletor: Trabalhador regista turnos completos e guarda rascunhos; Encarregado distribui/revê trabalho; Administrativo gere tarifas e emite documentos; Cliente consulta apenas os seus documentos. Usar dados de demonstração, sem autenticação ou certificação fiscal de produção.
+```sh
+docker compose ps -a
+```
 
-<<<<<<< HEAD
-Parar com Ctrl+C ou `docker compose down`. Reiniciar com o mesmo comando mantém o volume. **Não usar down --volumes para parar normalmente**: elimina os dados do projeto. O projeto Compose chama-se fonsat-local, separado do antigo fonsat-teste. O novo volume app_database não reutiliza nem apaga o antigo postgres_data do Compose anterior; o banco antigo não é migrado automaticamente. PostgreSQL não publica porta no host.
-=======
-<<<<<<< Updated upstream
-Testes oficiais (somente Docker + Compose no host): `sh scripts/test.sh`. Evidências e resumo em `.test-results/`; o comando prepara e limpa o ambiente isolado. [Plano da fase 3](docs/plano-fase-3.md).
-=======
-Parar com Ctrl+C ou `docker compose down`. Reiniciar com o mesmo comando mantém o volume. **Não usar down --volumes para parar normalmente**: elimina os dados do projeto. Os dados ficam no volume app_database do projeto fonsat-local. PostgreSQL não publica porta no host.
->>>>>>> ajustes
+O primeiro arranque aplica as migrações e carrega os dados de demonstração apenas se o banco estiver vazio. O seed inclui duas empresas, utilizadores, obras, alocações, tarifas históricas, trabalhos e documentos de exemplo, sem preços pendentes.
 
-Portas ocupadas? Copiar `.env.example` para `.env`, alterar WEB_PORT/API_PORT e NEXT_PUBLIC_API_URL (URL acessível pelo navegador) e reconstruir. Credenciais fixas são apenas para esta demonstração local, com frontend/API publicados em loopback. O primeiro build requer internet.
+Os dados são preservados entre arranques. Para parar:
 
-Se initialize falhar, consultar `docker compose logs initialize`. Falha de migração/seed impede iniciar a API. O marcador `_LocalInitialization` regista seed iniciado/concluído; uma interrupção deixa o estado started e o próximo arranque recusa repetir o seed destrutivo. Não marcar complete manualmente sem validar os dados. Recuperar o banco a partir de backup ou, somente num projeto descartável, recriar o volume e repetir o arranque. O comando `npm run prisma:seed` é destrutivo e não deve ser executado sobre dados a preservar.
+```sh
+docker compose down
+```
 
-## Testar
+**Atenção:** `docker compose down --volumes` elimina os dados do projeto.
+
+O primeiro build requer internet. Não é necessário instalar Node.js ou PostgreSQL no computador.
+
+### Portas e inicialização
+
+Para alterar as portas, copiar `.env.example` para `.env`, ajustar `WEB_PORT`, `API_PORT` e `NEXT_PUBLIC_API_URL` e reconstruir os serviços.
+
+Se a inicialização falhar:
+
+```sh
+docker compose logs initialize
+```
+
+Uma execução interrompida do seed não é repetida automaticamente, para evitar apagar dados. Consulte o [relatório da fase 5](docs/relatorio-fase-5.md) para detalhes.
+
+## Usar a aplicação
+
+Não existe login real. O seletor de personas permite experimentar os quatro papéis:
+
+| Papel | Funcionalidades |
+|---|---|
+| Trabalhador | Preencher turnos, guardar rascunhos no dispositivo e enviar turnos completos |
+| Encarregado | Distribuir trabalhadores, analisar divergências e corrigir horas |
+| Administrativo | Gerir obras e tarifas, conferir prévias e emitir faturas e notas |
+| Cliente | Consultar os seus documentos emitidos e a composição dos valores |
+
+Os rascunhos funcionam sem rede depois de a interface estar carregada. O envio é iniciado pelo utilizador quando existe ligação.
+
+As faturas emitidas são preservadas. Correções posteriores geram notas de crédito ou débito pela diferença, relacionadas com o documento original.
+
+## Testes
+
+Executar a bateria automatizada:
 
 ```sh
 sh scripts/test.sh
 ```
 
-Só requer shell, Docker e Compose. Cria banco/rede/volume exclusivos, sem portas do host, e limpa os próprios recursos. Resumo, logs e screenshots em `.test-results/`. O modo `baseline` é parcial e não executa browser.
-<<<<<<< HEAD
+O comando prepara um ambiente Docker isolado, executa as verificações e remove os próprios recursos. Não utiliza nem apaga o banco de demonstração.
+
+Os resultados, logs e capturas ficam em `.test-results/`.
+
+Para repetir os passos 1 a 11 do roteiro pela interface, com seed completo num banco descartável e captura de prints:
+
+```sh
+sh scripts/test-manual-ui.sh
+```
+
+Consulte o [relatório dos testes pela interface](docs/relatorio-testes-manuais-frontend.md).
 
 ## Documentação
 
-[Decisões](DECISOES.md) · [Plano](docs/PLANO_IMPLEMENTACAO.md) · [Fluxo](docs/fluxo-das-fases.md) · [Testes](docs/plano-fase-3.md) · [Fase 5](docs/relatorio-fase-5.md)
-
-A fase 5 pode ser integrada antes de ajustes; não contém os commits dessa branch nem o experimento abandonado de ajustes entre clientes. Revisões locais de DECISOES.md em ajustes permanecem separadas.
-=======
->>>>>>> Stashed changes
-
-Para repetir os passos 1 a 11 pela interface, com seed completo num banco descartável e captura de prints: `sh scripts/test-manual-ui.sh`. [Relatório e evidências](docs/relatorio-testes-manuais-frontend.md).
-
-## Documentação
-
-<<<<<<< Updated upstream
 - [Enunciado](docs/enunciado.pdf)
+- [Decisões e justificações](DECISOES.md)
 - [Plano de implementação](docs/PLANO_IMPLEMENTACAO.md)
-- [Decisões](DECISOES.md)
 - [Fluxo das fases](docs/fluxo-das-fases.md)
+- [Plano de testes](docs/plano-fase-3.md)
 
-- [Relatório da fase 1](docs/relatorio-fase-1.md)
-- [Relatório da fase 2.1](docs/relatorio-fase-2.1.md)
-- [Relatório da fase 2.2](docs/relatorio-fase-2.2.md)
-- [Relatório da fase 2.3](docs/relatorio-fase-2.3.md)
-- [Relatório da fase 2.4](docs/relatorio-fase-2.4.md)
-- [Relatório da fase 2.5](docs/relatorio-fase-2.5.md)
-- [Relatório da fase 2.6](docs/relatorio-fase-2.6.md)
-- [Frontend: execução e verificações](frontend/README.md)
-- [Relatório da fase 4.1](docs/relatorio-fase-4.1.md)
-- [Relatório da fase 4.2](docs/relatorio-fase-4.2.md)
-- [Relatório da fase 4.3](docs/relatorio-fase-4.3.md)
-- [Relatório da fase 4.4](docs/relatorio-fase-4.4.md)
-- [Relatório da fase 4.5](docs/relatorio-fase-4.5.md)
-=======
-[Decisões](DECISOES.md) · [Plano](docs/PLANO_IMPLEMENTACAO.md) · [Fluxo](docs/fluxo-das-fases.md) · [Testes](docs/plano-fase-3.md) · [Fase 5](docs/relatorio-fase-5.md)
->>>>>>> Stashed changes
->>>>>>> ajustes
+## Relatórios das fases
+
+A implementação seguiu a ordem **1 → 2 → 4 → 3 → 5**.
+
+| Fase | Entrega |
+|---|---|
+| [1 — Base do banco](docs/relatorio-fase-1.md) | Modelo, migrações e proteções do banco |
+| [2.1 — Contexto e autorização](docs/relatorio-fase-2.1.md) | Personas, permissões e contexto da empresa |
+| [2.2 — Obras e alocações](docs/relatorio-fase-2.2.md) | Distribuição e gestão dos períodos |
+| [2.3 — Tarifas](docs/relatorio-fase-2.3.md) | Preços e vigências históricas |
+| [2.4 — Registos de horas](docs/relatorio-fase-2.4.md) | Eventos, consolidação e deduplicação |
+| [2.5 — Correções](docs/relatorio-fase-2.5.md) | Versões e ajustes de trabalho |
+| [2.6 — Faturação](docs/relatorio-fase-2.6.md) | Prévias, emissão e documentos de ajuste |
+| [4.1 — Base do frontend](docs/relatorio-fase-4.1.md) | Navegação, personas e integração HTTP |
+| [4.2 — Grelha do trabalhador](docs/relatorio-fase-4.2.md) | Turnos, rascunhos e envios |
+| [4.3 — Gestão de obras](docs/relatorio-fase-4.3.md) | Distribuição, pendências e correções |
+| [4.4 — Faturação no frontend](docs/relatorio-fase-4.4.md) | Tarifas, emissão e detalhe dos documentos |
+| [4.5 — Integração](docs/relatorio-fase-4.5.md) | Revisão dos fluxos e responsividade |
+| [3.1 — Base dos testes](docs/relatorio-fase-3.1.md) | Ambiente Docker e execução das verificações |
+| [3.2 — Isolamento e integridade](docs/relatorio-fase-3.2.md) | Permissões, RLS, constraints e triggers |
+| [3.3 — Regras financeiras](docs/relatorio-fase-3.3.md) | Tarifas, arredondamento, histórico e concorrência |
+| [3.4 — Fluxos integrados](docs/relatorio-fase-3.4.md) | Verificações dos fluxos completos |
+| [5 — Execução com Docker](docs/relatorio-fase-5.md) | Arranque completo e persistência dos dados |
+
+### Ajustes e evidências
+
+- [Relatório dos ajustes](docs/relatorio-ajustes.md)
+- [Testes pela interface e prints](docs/relatorio-testes-manuais-frontend.md)
+
+## Limites da demonstração
+
+Não inclui autenticação real, emissão fiscal certificada, integração com a AT, IVA, SAF-T, envio de emails ou publicação em produção.
+
+As decisões e a proposta de evolução fiscal estão descritas em [DECISOES.md](DECISOES.md).
