@@ -16,7 +16,7 @@ Base: main `42acffb`, depois das fases 1 → 2 → 4. A extensão experimental d
 1. `fase-3.1/base-testes`: Docker, harness seguro, orquestração, baseline executado e matriz de regras/lacunas. [Relatório 3.1](relatorio-fase-3.1.md).
 2. `fase-3.2/isolamento-integridade`: permissões/RLS, constraints e triggers que ainda não tenham verificação significativa. [Relatório 3.2](relatorio-fase-3.2.md).
 3. `fase-3.3/regras-financeiras`: lacunas de fronteiras, concorrência, idempotência e snapshots; preservar os testes financeiros existentes. [Relatório 3.3](relatorio-fase-3.3.md).
-4. `fase-3.4/fluxos-integrados`: fluxos essenciais do browser, diagnósticos e comando completo final.
+4. `fase-3.4/fluxos-integrados`: fluxos essenciais do browser, diagnósticos e comando completo final. [Relatório 3.4](relatorio-fase-3.4.md).
 
 Cada etapa nasce da anterior, possui commit e relatório próprios. PRs futuros seguem esta ordem, depois da integração da fase 4.5; a fase 5 de infraestrutura de produção continua pendente.
 

@@ -93,6 +93,16 @@ async function selectPersona(id, area) {
 }
 async function workerWeek() {
   await page.getByLabel('Semana a consultar').fill(fixture.week);
+  await page.waitForFunction((day) => {
+    const expected = new Intl.DateTimeFormat('pt-PT', {
+      day: '2-digit',
+      month: 'short',
+      timeZone: 'UTC',
+    }).format(new Date(day + 'T12:00:00Z'));
+    return document
+      .querySelector('.day-section .day-title span')
+      ?.textContent?.startsWith(expected);
+  }, fixture.week);
 }
 async function fillTurn(dayIndex, siteId, tradeId, entry, exit = '') {
   const day = fixture.days[dayIndex];
@@ -187,6 +197,20 @@ async function issueNote(noteId) {
 
 try {
   await page.goto(base);
+  const originState = await page.evaluate(() => ({
+    secureContext: window.isSecureContext,
+    randomUUID: typeof crypto.randomUUID,
+  }));
+  assert.equal(
+    originState.secureContext,
+    true,
+    'TEST_INFRASTRUCTURE: browser origin must be secure (HTTPS/localhost or explicit disposable test origins)',
+  );
+  assert.equal(
+    originState.randomUUID,
+    'function',
+    'TEST_INFRASTRUCTURE: native crypto.randomUUID is unavailable',
+  );
   await page
     .locator('select[aria-label="Persona de demonstração"] option')
     .nth(1)
@@ -657,23 +681,40 @@ try {
     'storage corrompido preservado e catálogos/rascunhos isolados por tenant',
   );
 
+  let releaseOldResponse;
+  let markOldResponseReady;
+  let markOldResponseDone;
+  let oldRequestCaptured = false;
+  const oldResponseReady = new Promise((resolve) => {
+    markOldResponseReady = resolve;
+  });
+  const oldResponseRelease = new Promise((resolve) => {
+    releaseOldResponse = resolve;
+  });
+  const oldResponseDone = new Promise((resolve) => {
+    markOldResponseDone = resolve;
+  });
   await page.route(`${fixture.api}/sites`, async (route) => {
-    if (route.request().headers()['x-user-id'] === String(fixture.workerId))
-      await new Promise((resolve) => setTimeout(resolve, 1200));
-    await route.continue().catch(() => {});
+    if (
+      !oldRequestCaptured &&
+      route.request().headers()['x-user-id'] === String(fixture.workerId)
+    ) {
+      oldRequestCaptured = true;
+      const realResponse = await route.fetch();
+      markOldResponseReady();
+      await oldResponseRelease;
+      await route.fulfill({ response: realResponse }).catch(() => {});
+      markOldResponseDone();
+    } else await route.continue().catch(() => {});
   });
   await page
     .getByLabel('Persona de demonstração', { exact: true })
     .selectOption(String(fixture.workerId));
-  await page.waitForFunction(
-    (id) =>
-      document.querySelector('select[aria-label="Persona de demonstração"]')
-        ?.value === String(id),
-    fixture.workerId,
-  );
+  await oldResponseReady;
   await selectPersona(fixture.otherWorkerId, '/worker');
   await workerWeek();
-  await new Promise((resolve) => setTimeout(resolve, 1400));
+  releaseOldResponse();
+  await oldResponseDone;
   const otherCompanyOptions = await page
     .locator('.turn-block')
     .first()
@@ -762,7 +803,7 @@ try {
     .catch(() => {});
   writeFileSync(
     resolve(output, 'failure.txt'),
-    `${failure.stack}\n${page.url()}\n${await page
+    `${failure.stack}\nPage errors: ${JSON.stringify(pageErrors)}\n${page.url()}\n${await page
       .locator('body')
       .innerText()
       .catch(() => '')}`,

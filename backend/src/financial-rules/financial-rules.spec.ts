@@ -177,6 +177,114 @@ describe('fase 3.3 — fronteiras financeiras e invariantes', () => {
       ).toBe(2);
     });
   });
+  it("correção em novembro mantém setembro a €10/h após tarifa D+1 de outubro a €15/h", async () => {
+    const current = await context("10.00");
+    await withSystemTime("2020-09-30T12:00:00Z", async () => {
+      const payload = {
+        clientId: current.client.id,
+        tradeId: current.trade.id,
+        hourlyRate: "15.00",
+      };
+      const ratesBefore = await database.prisma.clientRate.findMany({
+        where: { clientId: current.client.id },
+      });
+      await post("/rates", { ...payload, validFrom: "2020-09-30" }).expect(409);
+      expect(
+        await database.prisma.clientRate.findMany({
+          where: { clientId: current.client.id },
+        }),
+      ).toEqual(ratesBefore);
+      const nextRate = await post("/rates", {
+        ...payload,
+        validFrom: "2020-10-01",
+      }).expect(201);
+      expect(nextRate.body.validFrom).toBe("2020-09-30T23:00:00.000Z");
+      expect(nextRate.body.hourlyRate).toBe("15.00");
+      const historicalRate = await database.prisma.clientRate.findUniqueOrThrow(
+        {
+          where: { id: current.rate.id },
+        },
+      );
+      expect(historicalRate.validTo!.toISOString()).toBe(
+        "2020-09-30T22:59:59.999Z",
+      );
+      expect(historicalRate.hourlyRate.toFixed(2)).toBe("10.00");
+    });
+    const submitted = await withSystemTime("2020-09-30T17:00:00Z", () =>
+      submit(current, events(current, "2020-09-15", "08:00:00", "16:00:00")),
+    );
+    const original = await database.prisma.workRecord.findUniqueOrThrow({
+      where: { id: submitted.records[0].id },
+    });
+    expect(original.totalMinutes).toBe(480);
+    expect(original.hourlyRateSnapshot!.toFixed(2)).toBe("10.00");
+    expect(original.totalAmount!.toFixed(2)).toBe("80.00");
+    const issued = await withSystemTime("2020-10-02T12:00:00Z", () =>
+      issue(current, 9),
+    );
+    const invoiceBefore = await database.prisma.invoice.findUniqueOrThrow({
+      where: { id: issued.id },
+      include: { lines: true },
+    });
+    expect(invoiceBefore.status).toBe("ISSUED");
+    expect(invoiceBefore.totalAmount.toFixed(2)).toBe("80.00");
+    expect(invoiceBefore.lines).toHaveLength(1);
+    expect(invoiceBefore.lines[0].hourlyRateSnapshot.toFixed(2)).toBe("10.00");
+    expect(invoiceBefore.lines[0].lineAmount.toFixed(2)).toBe("80.00");
+    await withSystemTime("2020-11-10T12:00:00Z", async () => {
+      const correction = await post(
+        `/attendance/records/${original.id}/corrections`,
+        {
+          siteId: current.site.id,
+          tradeId: current.trade.id,
+          reason: "Correção retroativa: seis horas em setembro",
+          events: events(current, "2020-09-15", "08:00:00", "14:00:00"),
+        },
+        sample.foreman,
+      ).expect(201);
+      const corrected = await database.prisma.workRecord.findUniqueOrThrow({
+        where: { id: correction.body.record.id },
+      });
+      expect(corrected).toMatchObject({
+        siteId: original.siteId,
+        tradeId: original.tradeId,
+        workDate: original.workDate,
+        totalMinutes: 360,
+        clientRateId: current.rate.id,
+        correctsInvoicedRecordId: original.id,
+      });
+      expect(corrected.hourlyRateSnapshot!.toFixed(2)).toBe("10.00");
+      expect(corrected.totalAmount!.toFixed(2)).toBe("60.00");
+      const credit = await database.prisma.invoice.findUniqueOrThrow({
+        where: { id: correction.body.adjustmentId },
+        include: { lines: true },
+      });
+      expect(credit).toMatchObject({
+        clientId: current.client.id,
+        parentInvoiceId: issued.id,
+        type: "CREDIT_NOTE",
+        status: "DRAFT",
+        year: 2020,
+        month: 11,
+        issuedAt: null,
+      });
+      expect(credit.totalAmount.toFixed(2)).toBe("20.00");
+      expect(credit.lines).toHaveLength(1);
+      expect(credit.lines[0].hourlyRateSnapshot.toFixed(2)).toBe("10.00");
+      expect(credit.lines[0].lineAmount.toFixed(2)).toBe("20.00");
+      expect(
+        await database.prisma.workRecord.findUniqueOrThrow({
+          where: { id: original.id },
+        }),
+      ).toEqual(original);
+      expect(
+        await database.prisma.invoice.findUniqueOrThrow({
+          where: { id: issued.id },
+          include: { lines: true },
+        }),
+      ).toEqual(invoiceBefore);
+    });
+  });
   it('alocação de um dia no fim do DST tem 25 horas e a consulta respeita fim exclusivo', async () => {
     const current = await context('20.00', false);
     const payload = {

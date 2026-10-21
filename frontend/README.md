@@ -20,3 +20,5 @@ Testes de datas/rascunhos/erros: `npm test`.
 - [Integração, smoke real e capturas](../docs/relatorio-fase-4.5.md)
 
 Na distribuição semanal, clique em **Livre** para escolher obra/ofício e guardar um dia. A cópia preserva dias ocupados e apresenta o resultado parcial. Validação específica: `node qa/distribution.mjs`, com harness e portas descritos no relatório 4.5.
+
+Testes oficiais da fase 3: na raiz, `sh scripts/test.sh` (Docker/Compose; sem Node ou Chromium no host). O runner usa bancos independentes nos dois smokes e guarda evidências em `.test-results/`. [Plano](../docs/plano-fase-3.md).
