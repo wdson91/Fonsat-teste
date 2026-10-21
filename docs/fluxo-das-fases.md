@@ -23,3 +23,6 @@ Depois de 2.6, executar 4 antes de 3 e 5, sem renumerar: `fase-4.1/base-frontend
 Futuros PRs para main seguem essa dependência, aguardando a integração da branch anterior. Não foram criados PRs nem publicados commits por este fluxo local.
 
 As branches 4.1–4.5 possuem implementação e relatórios locais. A integração visual/funcional está documentada em [relatorio-fase-4.5.md](relatorio-fase-4.5.md); isso não significa merge em main nem conclusão das fases 3 e 5.
+
+
+Depois da 4.5, os PRs de testes seguem `fase-3.1/base-testes` → `fase-3.2/isolamento-integridade` → `fase-3.3/regras-financeiras` → `fase-3.4/fluxos-integrados`. A próxima parte da anterior. O ambiente Docker de testes não antecipa a fase 5 de produção. A extensão experimental de ajustes entre clientes não entra nesta cadeia.

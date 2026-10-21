@@ -1,0 +1,9 @@
+.git
+**/node_modules
+**/dist
+**/.next
+**/.qa
+**/.env
+**/.env.local
+**/coverage
+.test-results

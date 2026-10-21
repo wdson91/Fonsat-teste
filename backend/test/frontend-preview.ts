@@ -145,7 +145,7 @@ async function main() {
     app = testingModule.createNestApplication({ logger: false });
     configureHttp(app);
     await app.listen(Number(process.env.QA_API_PORT ?? 3101), '0.0.0.0');
-    const api = `http://localhost:${process.env.QA_API_PORT ?? 3101}`;
+    const api = `http://${process.env.QA_API_HOST ?? 'localhost'}:${process.env.QA_API_PORT ?? 3101}`;
     const events = (date: string, tradeId: number) => {
       const shiftId = randomUUID();
       return [

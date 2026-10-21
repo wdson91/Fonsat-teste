@@ -52,3 +52,6 @@ Ordem de execução acordada: **1 -> 2 -> 4 -> 3 -> 5**, mantendo a numeração 
 4. **Fase 4 (implementada e validada nas branches 4.1–4.5)**: Frontend Next.js com Persona Switcher e as 4 vistas mínimas.
    - Branches encadeadas: 4.1 base/personas, 4.2 grelha do trabalhador, 4.3 gestão, 4.4 faturação, 4.5 integração visual/funcional. Cada uma possui relatório e commit próprios.
 5. **Fase 5**: Docker Compose final completo (`postgres` + `backend` + `frontend`) e revisão final de `README.md` e `DECISOES.md`.
+
+
+A fase 3 é executada em quatro branches encadeadas (3.1 base Docker, 3.2 isolamento/integridade, 3.3 regras financeiras, 3.4 fluxos integrados), conforme [plano-fase-3.md](plano-fase-3.md). Docker nesta fase serve apenas os testes; infraestrutura de produção permanece na fase 5. Defeitos são diagnosticados sem correções de produção.

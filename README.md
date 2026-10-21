@@ -24,7 +24,7 @@ Para a carga inicial de demonstração: `npm run prisma:seed`. Não repetir o se
 
 Em `backend`: `npx prisma validate` e `npm run build`.
 
-Testes: `npm test -- --runInBand`. Exigem o PostgreSQL local e permissão para criar/apagar bancos de teste descartáveis.
+Testes oficiais (somente Docker + Compose no host): `sh scripts/test.sh`. Evidências e resumo em `.test-results/`; o comando prepara e limpa o ambiente isolado. [Plano da fase 3](docs/plano-fase-3.md).
 
 ## Documentação
 
