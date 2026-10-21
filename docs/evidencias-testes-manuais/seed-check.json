@@ -1,0 +1,10 @@
+{
+  "pendingRate": 0,
+  "records": 9,
+  "plumbing": {
+    "status": "ACTIVE",
+    "minutes": 240,
+    "rate": "22.00",
+    "amount": "88.00"
+  }
+}

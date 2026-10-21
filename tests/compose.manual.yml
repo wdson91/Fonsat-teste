@@ -1,0 +1,3 @@
+services:
+  checks:
+    command: ["node", "/workspace/backend/test/manual-preview.mjs"]
