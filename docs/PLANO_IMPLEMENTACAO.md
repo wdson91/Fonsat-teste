@@ -44,14 +44,14 @@ Este plano descreve a implementação mínima, auditável e focada nas regras fi
 
 ## 2. Fases de Execução
 
-Ordem de execução acordada: **1 -> 2 -> 4 -> 3 -> 5**, mantendo a numeração original. O frontend é integrado antes da revisão ampliada de testes; fase 3 e infraestrutura final da fase 5 continuam pendentes.
+Ordem de execução acordada: **1 -> 2 -> 4 -> 3 -> 5**, mantendo a numeração original. O frontend é integrado antes da revisão ampliada de testes; a fase 3 está integrada; a fase 5 está implementada na branch fase-5/execucao-docker, aguardando integração.
 
 1. **Fase 1 (Concluída)**: PostgreSQL no `docker-compose.yml`, setup do `backend/` (NestJS + Prisma), `schema.prisma`, migration inicial com Triggers de Imutabilidade + RLS e `seed.ts` com 2 empresas completas.
 2. **Fase 2 (implementada em branches encadeadas 2.1–2.6)**: serviços/controllers simples de personas, alocações, tarifas, apontamentos, correções e faturação; guard único, sem paginação. Contratos e limites nos relatórios em `docs/relatorio-fase-2.*.md`. Prévia sem escrita, token contra obsolescência, atrasados sem limite inferior, pendências separadas e ajustes por diferença líquida já emitida.
 3. **Fase 3**: revisão/ampliação dos testes; os testes significativos de regras, segurança, concorrência e regressão já acompanham cada subfase 2 em bancos descartáveis. Não se adia a validação financeira para o fim.
 4. **Fase 4 (implementada e validada nas branches 4.1–4.5)**: Frontend Next.js com Persona Switcher e as 4 vistas mínimas.
    - Branches encadeadas: 4.1 base/personas, 4.2 grelha do trabalhador, 4.3 gestão, 4.4 faturação, 4.5 integração visual/funcional. Cada uma possui relatório e commit próprios.
-5. **Fase 5**: Docker Compose final completo (`postgres` + `backend` + `frontend`) e revisão final de `README.md` e `DECISOES.md`.
+5. **Fase 5 (implementada em branch própria)**: Compose local completo (banco, inicialização, API e frontend), migrações/seed inicial seguro e README. Validação e limites em [relatorio-fase-5.md](relatorio-fase-5.md). A revisão de DECISOES.md na branch ajustes fica separada.
 
 
-A fase 3 é executada em quatro branches encadeadas (3.1 base Docker, 3.2 isolamento/integridade, 3.3 regras financeiras, 3.4 fluxos integrados), conforme [plano-fase-3.md](plano-fase-3.md). Docker nesta fase serve apenas os testes; infraestrutura de produção permanece na fase 5. Defeitos são diagnosticados sem correções de produção.
+A fase 3 é executada em quatro branches encadeadas (3.1 base Docker, 3.2 isolamento/integridade, 3.3 regras financeiras, 3.4 fluxos integrados), conforme [plano-fase-3.md](plano-fase-3.md). Docker nesta fase serve apenas os testes; o empacotamento local da aplicação pertence à fase 5; deploy de produção fica fora do âmbito. Defeitos são diagnosticados sem correções de produção.
