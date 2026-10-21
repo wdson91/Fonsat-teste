@@ -290,6 +290,21 @@ try {
   });
   mark('foreman: correção com histórico sem preços');
 
+  await selectPersona(fixture.workerId, '/worker');
+  await workerWeek();
+  const correctedExit = page.locator('.turn-block').filter({
+    has: page.locator('input[type="time"]:disabled'),
+  }).getByLabel(/Saída/).first();
+  await correctedExit.waitFor();
+  assert.equal(await correctedExit.inputValue(), '11:30');
+  assert.equal(await correctedExit.isDisabled(), true);
+  assert.equal(await page.locator('input[type="time"]:enabled').first().inputValue(), '13:00');
+  await page.reload();
+  await workerWeek();
+  assert.equal(await correctedExit.inputValue(), '11:30');
+  mark('worker: correção atual na grelha após troca de persona e reload, rascunho preservado');
+
+
   await selectPersona(fixture.adminId, '/billing');
   let preview = await prepareInvoice();
   assert.equal(preview.totalAmount, '70.00');

@@ -25,6 +25,7 @@ import {
   loadWorkerStore,
   newDraft,
   prepareTurn,
+  reconcileConfirmedTurns,
   saveWorkerStore,
   turnValidation,
   workerStorageKey,
@@ -118,6 +119,7 @@ export function WorkerPage() {
         setRecords(receivedRecords);
         const next = {
           ...storeRef.current,
+          rows: reconcileConfirmedTurns(storeRef.current.rows, receivedRecords),
           sites,
           trades,
           allocations: allocations.map(
